@@ -1,0 +1,100 @@
+<section class="dev-chat">
+  <header class="header">
+    <h1>Dev chat</h1>
+    <p class="note">Developer only. Real users talk by voice.</p>
+    <a routerLink="/memories">Memories</a>
+    <span class="state" data-testid="state">{{ chat.state() }}</span>
+  </header>
+
+  <ol class="log" aria-live="polite">
+    @for (entry of chat.entries(); track entry.id) {
+      @switch (entry.from) {
+        @case ('action') {
+          <li class="entry action" [class]="entry.status" data-testid="action-card">
+            <p class="kind">{{ kindLabels[entry.kind] }}</p>
+            <p class="text">{{ entry.summary }}</p>
+            @if (entry.status === 'pending') {
+              <p class="actions">
+                <button
+                  type="button"
+                  (click)="chat.resolve(entry.actionId, true)"
+                  [disabled]="!chat.canSend()"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="chat.resolve(entry.actionId, false)"
+                  [disabled]="!chat.canSend()"
+                >
+                  Cancel
+                </button>
+              </p>
+            } @else {
+              <p class="meta">
+                <span class="badge">{{ entry.status }}</span>
+              </p>
+            }
+          </li>
+        }
+        @case ('companion') {
+          <li class="entry companion">
+            <p class="text">{{ entry.text }}</p>
+            <p class="meta">
+              <span class="badge" [class]="entry.mode">{{ entry.mode }}</span>
+              @if (!entry.teasingAllowed) {
+                <span class="badge muted">teasing off</span>
+              }
+            </p>
+          </li>
+        }
+        @default {
+          <li class="entry" [class]="entry.from">
+            <p class="text">{{ entry.text }}</p>
+          </li>
+        }
+      }
+    } @empty {
+      <li class="empty">Say something to your companion.</li>
+    }
+    @if (chat.state() === 'thinking') {
+      <li class="entry companion thinking">Thinking…</li>
+    }
+  </ol>
+
+  <form class="composer" (submit)="$event.preventDefault(); send()">
+    <label for="dev-chat-input" class="visually-hidden">Message</label>
+    <input
+      #input
+      id="dev-chat-input"
+      autocomplete="off"
+      placeholder="Type a message"
+      [value]="draft()"
+      (input)="draft.set(input.value)"
+      [disabled]="chat.state() === 'closed'"
+    />
+    <button type="submit" [disabled]="!chat.canSend() || !draft().trim()">Send</button>
+    <button
+      type="button"
+      class="talk"
+      [class.recording]="talk.recording()"
+      [disabled]="!chat.canSend() && !talk.recording()"
+      (pointerdown)="talk.start()"
+      (pointerup)="talk.stop()"
+      (pointerleave)="talk.stop()"
+      [attr.aria-pressed]="talk.recording()"
+    >
+      {{ talk.recording() ? 'Listening…' : 'Hold to talk' }}
+    </button>
+    <button
+      type="button"
+      class="mute"
+      (click)="toggleMute()"
+      [attr.aria-pressed]="player.muted()"
+      [attr.aria-label]="player.muted() ? 'Unmute companion' : 'Mute companion'"
+    >
+      {{ player.muted() ? 'Unmute' : 'Mute' }}
+    </button>
+  </form>
+</section>

@@ -1,0 +1,91 @@
+<app-menu-page
+  eyebrow="LITTLE STEPS, BIG ADVENTURES"
+  heading="Quest log"
+  icon="flag"
+  footer="✦ EVERY SMALL STEP COUNTS ✦"
+  [error]="plans.error()"
+>
+  @if (empty()) {
+    <app-empty>
+      Nothing planned yet. Ask your companion for a task, a reminder or a workout.
+    </app-empty>
+  } @else {
+    @if (plans.tasks().length) {
+      <div class="summary">
+        <app-icon name="sparkles" />
+        <strong>{{ doneCount() }} of {{ plans.tasks().length }} quests complete</strong>
+        <span class="progress" aria-hidden="true">
+          @for (task of plans.tasks(); track task.id) {
+            <span [class.filled]="task.done"></span>
+          }
+        </span>
+      </div>
+    }
+
+    <div class="columns">
+      <section aria-labelledby="tasks-heading">
+        <h2 id="tasks-heading"><app-icon name="quests" />Quests</h2>
+        <app-filter label="Filter quests" [options]="filters" [(value)]="filter" />
+        <ul class="list">
+          @for (task of shownTasks(); track task.id) {
+            <li
+              app-task-item
+              data-testid="task"
+              removable
+              [task]="task"
+              (toggled)="plans.setDone(task, !task.done)"
+              (removed)="plans.remove('tasks', task.id)"
+            ></li>
+          } @empty {
+            <li><app-empty>No quests here. A little breathing room!</app-empty></li>
+          }
+        </ul>
+
+        @if (plans.workoutPlans().length) {
+          <h2 class="training"><app-icon name="dumbbell" />Training plans</h2>
+          @for (plan of plans.workoutPlans(); track plan.id) {
+            <article class="plan" data-testid="workout-plan">
+              <header>
+                <h3>{{ plan.name }}</h3>
+                <button
+                  app-button
+                  variant="ghost"
+                  type="button"
+                  [attr.aria-label]="'Delete workout plan ' + plan.name"
+                  (click)="plans.remove('workout-plans', plan.id)"
+                >
+                  <app-icon name="trash" />
+                </button>
+              </header>
+              <ul>
+                @for (session of plan.sessions; track $index) {
+                  <li>
+                    <span class="pixel-label day">{{ session.day | titlecase }}</span>
+                    {{ session.focus }} · {{ session.minutes }} min
+                  </li>
+                }
+              </ul>
+            </article>
+          }
+        }
+      </section>
+
+      <aside aria-labelledby="reminders-heading">
+        <h2 id="reminders-heading"><app-icon name="bell" class="bell" />Gentle reminders</h2>
+        <ul class="list">
+          @for (reminder of plans.reminders(); track reminder.id) {
+            <li
+              app-reminder-item
+              data-testid="reminder"
+              removable
+              [reminder]="reminder"
+              (removed)="plans.remove('reminders', reminder.id)"
+            ></li>
+          } @empty {
+            <li><app-empty>All quiet for now.</app-empty></li>
+          }
+        </ul>
+      </aside>
+    </div>
+  }
+</app-menu-page>

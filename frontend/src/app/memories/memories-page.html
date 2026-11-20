@@ -1,0 +1,77 @@
+<app-menu-page
+  eyebrow="THE LITTLE THINGS THAT MAKE YOU, YOU"
+  heading="Memory diary"
+  icon="diary"
+  footer="♡ YOUR STORY, ONE MEMORY AT A TIME ♡"
+  [error]="store.error()"
+>
+  @if (store.memories().length) {
+    <p class="intro">
+      <app-icon name="heart" />{{ store.memories().length }} little memories, kept close.
+    </p>
+    <app-filter label="Memory kind" [options]="filters()" [(value)]="kind" />
+
+    <ul class="grid">
+      @for (memory of shown(); track memory.id) {
+        <li class="memory" [attr.data-kind]="memory.kind" data-testid="memory">
+          <div class="top">
+            <span class="pixel-label">{{ info[memory.kind].tag }}</span>
+            <app-icon [name]="info[memory.kind].icon" />
+          </div>
+          @if (editingId() === memory.id) {
+            <form (submit)="$event.preventDefault(); save(memory)">
+              <label [for]="'memory-' + memory.id" class="visually-hidden">Memory</label>
+              <textarea
+                #field
+                rows="3"
+                maxlength="300"
+                [id]="'memory-' + memory.id"
+                [value]="draft()"
+                (input)="draft.set(field.value)"
+              ></textarea>
+              <div class="actions">
+                <button app-button variant="primary" type="submit">Save</button>
+                <button app-button type="button" (click)="editingId.set(null)">Cancel</button>
+              </div>
+            </form>
+          } @else {
+            <p class="content">{{ memory.content }}</p>
+            <footer>
+              <span class="pixel-label">{{ memory.updated_at | date: 'd MMM' }}</span>
+              <span>
+                <button
+                  app-button
+                  variant="ghost"
+                  type="button"
+                  aria-label="Edit memory"
+                  (click)="edit(memory)"
+                >
+                  <app-icon name="pencil" />
+                </button>
+                <button
+                  app-button
+                  variant="ghost"
+                  type="button"
+                  aria-label="Forget memory"
+                  (click)="store.remove(memory.id)"
+                >
+                  <app-icon name="trash" />
+                </button>
+              </span>
+            </footer>
+          }
+        </li>
+      } @empty {
+        <li><app-empty>No memories in this little corner.</app-empty></li>
+      }
+    </ul>
+
+    <div class="forget">
+      <button app-button variant="danger" type="button" (click)="forgetEverything()">
+        Forget everything
+      </button>
+    </div>
+  } @else if (!store.loading() && !store.error()) {
+    <app-empty>Nothing yet. Tell your companion about your goals and habits.</app-empty>
+  }
+</app-menu-page>

@@ -1,0 +1,39 @@
+# Local development stack.
+#   docker compose up -d db        -> just the database (run backend/frontend natively for hot reload)
+#   docker compose up --build      -> database + backend container
+name: voice-companion
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-companion}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-companion}
+      POSTGRES_DB: ${POSTGRES_DB:-companion}
+    ports:
+      # 5433 on the host, so it never clashes with a locally installed Postgres on 5432.
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # Named volume: data survives `docker compose down` and is reused, never orphaned.
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-companion}:${POSTGRES_PASSWORD:-companion}@db:5432/${POSTGRES_DB:-companion}
+      CORS_ORIGINS: '["http://localhost:4200"]'
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

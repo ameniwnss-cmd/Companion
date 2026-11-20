@@ -1,0 +1,98 @@
+<p class="status" data-testid="hint"><span class="dot"></span>{{ hint() }}</p>
+
+<app-orb class="orb" [state]="orbState()" [level]="level" />
+
+@if (session.lastHeard() || session.lastSaid()) {
+  <div app-panel class="bubble" aria-live="polite">
+    <span class="pixel-label name">COMPANION</span>
+    @if (session.lastHeard(); as heard) {
+      <p class="you" data-testid="caption-you">
+        <span class="pixel-label">You</span>{{ heard.text }}
+      </p>
+    }
+    @if (session.lastSaid(); as said) {
+      <p class="said" data-testid="caption-companion">
+        <span class="visually-hidden">Companion: </span>{{ said.text }}
+      </p>
+    }
+  </div>
+}
+
+@if (session.pendingAction(); as action) {
+  <div
+    app-panel
+    class="pending"
+    role="group"
+    aria-labelledby="pending-title"
+    data-testid="pending-action"
+  >
+    <p class="pixel-label" id="pending-title">{{ kindLabels[action.kind] }}</p>
+    <p class="summary">{{ action.summary }}</p>
+    <div class="actions">
+      <button
+        app-button
+        variant="primary"
+        type="button"
+        [disabled]="!session.canSend()"
+        (click)="session.resolve(action.actionId, true)"
+      >
+        <app-icon name="check" />Save
+      </button>
+      <button
+        app-button
+        type="button"
+        [disabled]="!session.canSend()"
+        (click)="session.resolve(action.actionId, false)"
+      >
+        <app-icon name="close" />Cancel
+      </button>
+    </div>
+  </div>
+}
+
+@if (reminder(); as due) {
+  <div app-panel class="toast" role="status" data-testid="reminder">
+    <app-icon name="bell" />
+    <span>{{ due.text }}</span>
+    <button
+      app-button
+      variant="ghost"
+      type="button"
+      aria-label="Dismiss reminder"
+      (click)="dismissReminder(due.id)"
+    >
+      <app-icon name="close" />
+    </button>
+  </div>
+}
+
+@if (problem(); as text) {
+  <p class="problem" role="alert">{{ text }}</p>
+}
+
+<div class="controls">
+  <button
+    app-button
+    variant="primary"
+    type="button"
+    class="talk"
+    [class.listening]="talk.recording()"
+    [disabled]="orbState() === 'offline'"
+    [attr.aria-pressed]="talk.recording()"
+    (pointerdown)="talk.start()"
+    (pointerup)="talk.stop()"
+    (pointerleave)="talk.stop()"
+  >
+    <app-icon name="mic" />{{ talk.recording() ? 'Listening…' : 'Hold to talk' }}
+  </button>
+  <button
+    app-button
+    variant="tool"
+    type="button"
+    [attr.aria-pressed]="player.muted()"
+    [attr.aria-label]="player.muted() ? 'Unmute companion' : 'Mute companion'"
+    (click)="toggleMute()"
+  >
+    <app-icon [name]="player.muted() ? 'mute' : 'volume'" />
+  </button>
+</div>

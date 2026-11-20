@@ -1,0 +1,57 @@
+:host {
+  display: block;
+}
+
+.card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+}
+
+h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 1.1rem;
+
+  app-icon {
+    color: var(--honey);
+  }
+}
+
+.heading {
+  flex: 1;
+}
+
+.count {
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-label);
+  font-size: 0.65rem;
+}
+
+.more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding-top: 0.6rem;
+  border-top: 2px dashed var(--paper-dark);
+  color: var(--ink);
+  font-size: 0.9rem;
+  text-decoration: none;
+
+  app-icon {
+    transition: translate 0.2s;
+  }
+
+  &:hover {
+    color: var(--mint-deep);
+
+    app-icon {
+      translate: 3px 0;
+    }
+  }
+}

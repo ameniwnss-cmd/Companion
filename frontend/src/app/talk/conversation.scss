@@ -1,0 +1,135 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+  width: min(560px, 100%);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.8rem;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: oklch(0.15 0.03 150 / 0.75);
+  color: var(--paper);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--mint);
+  box-shadow: 0 0 8px var(--mint);
+  animation: blink 1.4s steps(2) infinite;
+}
+
+.orb {
+  width: clamp(180px, 34vmin, 280px);
+}
+
+.bubble {
+  position: relative;
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 1.1rem 1.2rem 0.9rem;
+  text-align: center;
+  animation: rise 0.3s ease-out both;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    width: 18px;
+    height: 12px;
+    background: var(--ink);
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    translate: -50% 0;
+  }
+}
+
+.name {
+  position: absolute;
+  top: -12px;
+  left: 14px;
+  padding: 0.1rem 0.45rem;
+  border: 2px solid var(--ink);
+  background: var(--amber);
+  color: var(--ink);
+}
+
+.you {
+  color: var(--muted);
+  font-size: 0.95rem;
+
+  .pixel-label {
+    margin-right: 0.4rem;
+  }
+}
+
+.said {
+  font-size: 1.1rem;
+  line-height: 1.35;
+}
+
+.pending {
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 1rem 1.2rem;
+  animation: rise 0.3s ease-out both;
+}
+
+.summary {
+  font-size: 1.1rem;
+}
+
+.actions,
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.4rem 0.4rem 0.8rem;
+
+  app-icon:first-child {
+    color: var(--honey);
+    animation: ring 3s infinite;
+  }
+}
+
+.problem {
+  padding: 0.4rem 0.8rem;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: oklch(0.88 0.07 15);
+  color: var(--ink);
+  text-align: center;
+}
+
+.controls {
+  gap: 0.7rem;
+}
+
+.talk {
+  height: 3.2rem;
+  padding: 0 1.6rem;
+  font-size: 1.15rem;
+  touch-action: none;
+}
+
+.talk.listening {
+  background: var(--mint);
+  animation: pulse 1.2s ease-in-out infinite;
+}

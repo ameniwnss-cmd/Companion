@@ -1,0 +1,240 @@
+:root {
+  color-scheme: dark;
+  --night: oklch(0.2 0.03 150);
+  --night-deep: oklch(0.15 0.03 150);
+  --ink: oklch(0.22 0.035 60);
+  --paper: oklch(0.93 0.04 85);
+  --paper-dark: oklch(0.84 0.05 80);
+  --muted: oklch(0.45 0.04 60);
+  --amber: oklch(0.8 0.15 75);
+  --amber-glow: oklch(0.85 0.17 80 / 0.55);
+  --mint: oklch(0.86 0.13 165);
+  --mint-deep: oklch(0.62 0.13 170);
+  --mint-glow: oklch(0.86 0.15 165 / 0.6);
+  --leaf: oklch(0.6 0.13 140);
+  --blush: oklch(0.75 0.12 15);
+  --sun: oklch(0.85 0.15 90);
+  --cherry: oklch(0.6 0.2 25);
+  --honey: oklch(0.7 0.14 60);
+  --shadow-pixel: 0 4px 0 0 var(--ink), 0 10px 24px -6px oklch(0 0 0 / 0.5);
+  --font-pixel: 'Pixelify Sans', ui-monospace, monospace;
+  --font-label: 'Silkscreen', ui-monospace, monospace;
+
+  --color-bg: var(--night);
+  --color-surface: var(--night-deep);
+  --color-border: oklch(0.3 0.04 60);
+  --color-text: var(--paper);
+  --color-muted: oklch(0.75 0.03 90);
+  --color-accent: var(--amber);
+  --color-on-accent: var(--ink);
+  --color-badge: oklch(0.28 0.03 150);
+  --color-supportive: oklch(0.4 0.07 200);
+  --color-crisis: oklch(0.4 0.12 15);
+  --color-warning: var(--sun);
+
+  font-family: var(--font-pixel);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--night);
+  color: var(--paper);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--amber);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.pixel-label {
+  font-family: var(--font-label);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-14px);
+  }
+}
+@keyframes shadow {
+  50% {
+    transform: scale(0.75);
+    opacity: 0.6;
+  }
+}
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+@keyframes spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes twinkle {
+  50% {
+    opacity: 0.35;
+    scale: 0.8;
+  }
+}
+@keyframes core-breathe {
+  50% {
+    transform: scale(0.9) rotate(8deg);
+    opacity: 0.8;
+  }
+}
+@keyframes current-flow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes bars {
+  from {
+    height: 4px;
+  }
+  to {
+    height: 22px;
+  }
+}
+@keyframes drift {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  20% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate(24px, -30px);
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-12px, -60px);
+  }
+}
+@keyframes fall {
+  0% {
+    transform: translate(0, 0) rotate(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(60px, 105vh) rotate(540deg);
+    opacity: 0.6;
+  }
+}
+@keyframes flicker {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  30% {
+    opacity: 0.65;
+  }
+  55% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.75;
+  }
+}
+@keyframes sunbeam {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes breathe {
+  from {
+    transform: scale(1.02);
+  }
+  to {
+    transform: scale(1.06) translateX(-1%);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes pulse {
+  50% {
+    scale: 1.05;
+  }
+}
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    translate: 0 -30%;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+@keyframes ring {
+  0%,
+  85%,
+  100% {
+    rotate: 0;
+  }
+  90% {
+    rotate: 15deg;
+  }
+  95% {
+    rotate: -15deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition: none !important;
+  }
+}

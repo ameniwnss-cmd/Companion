@@ -1,0 +1,100 @@
+.intro {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+
+  app-icon {
+    color: var(--blush);
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memory {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.9rem;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: oklch(1 0 0 / 0.5);
+  box-shadow: 0 3px 0 var(--ink);
+  transition:
+    translate 0.15s,
+    rotate 0.15s;
+
+  &:hover {
+    translate: 0 -3px;
+    rotate: -0.5deg;
+  }
+
+  &[data-kind='goal'] {
+    background: oklch(0.9 0.1 90 / 0.6);
+  }
+  &[data-kind='habit'] {
+    background: oklch(0.88 0.08 165 / 0.6);
+  }
+  &[data-kind='commitment'] {
+    background: oklch(0.88 0.07 15 / 0.6);
+  }
+  &[data-kind='recent_context'] {
+    background: oklch(0.88 0.05 230 / 0.6);
+  }
+}
+
+.top,
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.top app-icon {
+  color: var(--honey);
+}
+
+.content {
+  flex: 1;
+  font-size: 1.1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+textarea {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: oklch(1 0 0 / 0.7);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+
+  &:focus-visible {
+    outline: 3px dashed var(--amber);
+    outline-offset: 2px;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.forget {
+  margin-top: 1.5rem;
+  text-align: center;
+}

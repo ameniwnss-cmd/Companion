@@ -1,0 +1,86 @@
+:host {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(oklch(0.15 0.03 150 / 0.85), transparent);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--paper);
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-decoration: none;
+
+  app-icon {
+    color: var(--amber);
+    animation: twinkle 2.4s ease-in-out infinite;
+  }
+
+  small {
+    display: block;
+    color: var(--mint);
+    font-family: var(--font-label);
+    font-size: 0.55rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+  }
+}
+
+nav {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.3rem;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: oklch(0.15 0.03 150 / 0.7);
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.75rem;
+    border-radius: 4px;
+    color: var(--paper);
+    font-size: 0.95rem;
+    text-decoration: none;
+
+    &:hover {
+      background: oklch(1 0 0 / 0.1);
+      color: var(--amber);
+    }
+
+    &.active {
+      background: var(--amber);
+      color: var(--ink);
+      box-shadow: 0 3px 0 var(--ink);
+    }
+
+    &:focus-visible {
+      outline: 3px dashed var(--amber);
+      outline-offset: 2px;
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  :host {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .label,
+  .brand small {
+    display: none;
+  }
+
+  nav a {
+    padding: 0.45rem 0.5rem;
+  }
+}
