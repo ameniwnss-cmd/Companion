@@ -1,10 +1,12 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SOCKET_FACTORY } from '../session/companion-session';
+import { HANDS_FREE_FAILED } from '../session/hands-free';
 import { MICROPHONE_BLOCKED } from '../session/push-to-talk';
-import { FakePlayer, FakeSocket } from '../session/testing/fakes';
+import { FakeDetector, FakePlayer, FakeSocket } from '../session/testing/fakes';
 import { AudioPlayer } from '../voice/audio-player';
 import { Recorder } from '../voice/recorder';
+import { VOICE_DETECTOR } from '../voice/voice-detector';
 import { Conversation } from './conversation';
 
 class FakeRecorder {
@@ -43,12 +45,14 @@ describe('Conversation', () => {
   let socket: FakeSocket;
   let recorder: FakeRecorder;
   let player: PlayingPlayer;
+  let detector: FakeDetector;
   let fixture: ComponentFixture<Conversation>;
   let page: HTMLElement;
 
   const orb = () => page.querySelector('app-orb') as HTMLElement;
   const hint = () => page.querySelector('[data-testid="hint"]')?.textContent?.trim();
   const talkButton = () => page.querySelector('.talk') as HTMLButtonElement;
+  const handsFreeButton = () => page.querySelector('.hands-free') as HTMLButtonElement;
 
   async function settle(): Promise<void> {
     await fixture.whenStable();
@@ -64,12 +68,14 @@ describe('Conversation', () => {
     socket = new FakeSocket();
     recorder = new FakeRecorder();
     player = new PlayingPlayer();
+    detector = new FakeDetector();
     await TestBed.configureTestingModule({
       imports: [Conversation],
       providers: [
         { provide: SOCKET_FACTORY, useValue: socket.factory },
         { provide: Recorder, useValue: recorder },
         { provide: AudioPlayer, useValue: player },
+        { provide: VOICE_DETECTOR, useValue: detector.factory },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(Conversation);
@@ -153,7 +159,11 @@ describe('Conversation', () => {
   });
 
   it('offers a confirmation card for proposed actions', async () => {
-    socket.emit({ type: 'pending_action', id: 'a1', kind: 'reminder', summary: 'call mom at 6' });
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'reminder', summary: 'call mom at 6' }],
+    });
     await settle();
 
     const card = page.querySelector('[data-testid="pending-action"]') as HTMLElement;
@@ -172,7 +182,11 @@ describe('Conversation', () => {
     let changes = 0;
     fixture.componentInstance.plansChanged.subscribe(() => (changes += 1));
 
-    socket.emit({ type: 'pending_action', id: 'a1', kind: 'task', summary: 'stretch' });
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'task', summary: 'stretch' }],
+    });
     await settle();
     expect(changes).toBe(0);
 
@@ -180,7 +194,7 @@ describe('Conversation', () => {
     await settle();
     expect(changes).toBe(1);
 
-    socket.emit({ type: 'pending_action', id: 'a2', kind: 'task', summary: 'nap' });
+    socket.emit({ type: 'pending_action', id: 'a2', items: [{ kind: 'task', summary: 'nap' }] });
     socket.emit({ type: 'action_resolved', id: 'a2', status: 'cancelled' });
     await settle();
     expect(changes).toBe(1);
@@ -188,22 +202,6 @@ describe('Conversation', () => {
     socket.emit({ type: 'reminder_due', id: 'r1', title: 'water', text: 'Drink water.' });
     await settle();
     expect(changes).toBe(2);
-  });
-
-  it('shows a due reminder until it is dismissed', async () => {
-    socket.emit({
-      type: 'reminder_due',
-      id: 'r1',
-      title: 'stretch',
-      text: 'Hey, reminder: stretch.',
-    });
-    await settle();
-    const toast = page.querySelector('[data-testid="reminder"]') as HTMLElement;
-    expect(toast.textContent).toContain('Hey, reminder: stretch.');
-
-    (toast.querySelector('button') as HTMLButtonElement).click();
-    await settle();
-    expect(page.querySelector('[data-testid="reminder"]')).toBeNull();
   });
 
   it('explains a blocked microphone', async () => {
@@ -222,5 +220,122 @@ describe('Conversation', () => {
     expect(orb().dataset['state']).toBe('offline');
     expect(talkButton().disabled).toBe(true);
     expect(hint()).toContain("Can't reach your companion");
+  });
+
+  it('lists every item of a batch on one card', async () => {
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [
+        { kind: 'task', summary: 'a task: buy milk' },
+        { kind: 'reminder', summary: 'a reminder to call mom, today at 6 PM' },
+      ],
+    });
+    await settle();
+
+    const card = page.querySelector('[data-testid="pending-action"]') as HTMLElement;
+    expect(card.textContent).toContain('2 new things');
+    expect(Array.from(card.querySelectorAll('li')).map((li) => li.textContent?.trim())).toEqual([
+      'a task: buy milk',
+      'a reminder to call mom, today at 6 PM',
+    ]);
+    expect(card.querySelector('button[data-variant="primary"]')?.textContent).toContain('Save all');
+  });
+
+  it('offers to undo what was just saved', async () => {
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'task', summary: 'a task: buy milk' }],
+    });
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'confirmed' });
+    await settle();
+
+    const saved = page.querySelector('[data-testid="saved"]') as HTMLElement;
+    expect(saved.textContent).toContain('Saved');
+    const undo = Array.from(saved.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Undo'),
+    ) as HTMLButtonElement;
+    undo.click();
+    expect(socket.sent).toEqual([{ type: 'undo_action', id: 'a1' }]);
+
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'undone' });
+    await settle();
+    expect(page.querySelector('[data-testid="saved"]')).toBeNull();
+  });
+
+  describe('hands-free', () => {
+    async function turnOn(): Promise<void> {
+      handsFreeButton().click();
+      await settle();
+    }
+
+    it('listens without holding anything and sends what was said after a pause', async () => {
+      await turnOn();
+
+      expect(handsFreeButton().getAttribute('aria-pressed')).toBe('true');
+      expect(detector.listening).toBe(true);
+      expect(hint()).toContain('Hands-free is on');
+      expect(talkButton().textContent).toContain('End hands-free');
+
+      detector.events?.speechStarted();
+      await settle();
+      expect(orb().dataset['state']).toBe('listening');
+
+      const speech = new Blob(['hello']);
+      detector.events?.speechEnded(speech);
+      await settle();
+      expect(socket.sent).toEqual([speech]);
+      expect(detector.listening).toBe(false);
+    });
+
+    it('stops listening while the companion thinks and talks, then listens again', async () => {
+      await turnOn();
+
+      socket.emit({ type: 'status', state: 'thinking' });
+      await settle();
+      expect(detector.listening).toBe(false);
+
+      socket.emit({ type: 'status', state: 'idle' });
+      player.playing.set(true);
+      await settle();
+      expect(detector.listening).toBe(false);
+
+      player.playing.set(false);
+      await settle();
+      expect(detector.listening).toBe(true);
+    });
+
+    it('turns off with the end button and leaves the space bar alone while on', async () => {
+      await turnOn();
+      key('keydown');
+      await settle();
+      expect(recorder.recording()).toBe(false);
+
+      talkButton().click();
+      await settle();
+
+      expect(detector.listening).toBe(false);
+      expect(talkButton().textContent).toContain('Hold to talk');
+    });
+
+    it('explains when it cannot start', async () => {
+      detector.blocked = true;
+
+      await turnOn();
+
+      expect(page.querySelector('[role="alert"]')?.textContent).toContain(HANDS_FREE_FAILED);
+      expect(handsFreeButton().getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('switches off when the connection is lost', async () => {
+      await turnOn();
+
+      socket.fail();
+      await settle();
+
+      expect(detector.listening).toBe(false);
+      expect(handsFreeButton().getAttribute('aria-pressed')).toBe('false');
+    });
   });
 });

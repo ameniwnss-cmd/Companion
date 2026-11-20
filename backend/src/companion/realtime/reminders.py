@@ -4,11 +4,14 @@ import json
 import logging
 from collections.abc import Callable
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
+from companion.actions.repeat import next_occurrence
 from companion.actions.service import utc_now
-from companion.db.models import Reminder
+from companion.actions.tools import Weekday
+from companion.db.models import Reminder, User
 from companion.db.session import SessionFactory
 from companion.realtime.hub import ConnectionHub
 
@@ -47,8 +50,9 @@ class ReminderDispatcher:
         now = self._clock()
         delivered = 0
         async with self._sessions() as session, session.begin():
-            due = await session.scalars(
-                select(Reminder)
+            due = await session.execute(
+                select(Reminder, User.timezone)
+                .join(User, User.id == Reminder.user_id)
                 .where(
                     Reminder.remind_at <= now,
                     Reminder.delivered_at.is_(None),
@@ -56,12 +60,16 @@ class ReminderDispatcher:
                 )
                 .order_by(Reminder.remind_at)
                 .limit(BATCH_SIZE)
-                .with_for_update(skip_locked=True)
+                .with_for_update(of=Reminder, skip_locked=True)
             )
-            for reminder in due:
-                if await self._hub.send(reminder.user_id, reminder_event(reminder)):
+            for reminder, timezone in due.tuples():
+                if not await self._hub.send(reminder.user_id, reminder_event(reminder)):
+                    continue
+                delivered += 1
+                if reminder.repeat_days:
+                    reminder.remind_at = _next_time(reminder, now, timezone)
+                else:
                     reminder.delivered_at = now
-                    delivered += 1
         return delivered
 
     async def run(self, stop: asyncio.Event, interval_seconds: float) -> None:
@@ -72,3 +80,10 @@ class ReminderDispatcher:
                 logger.exception("Reminder dispatch failed; retrying on the next tick")
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
+
+
+def _next_time(reminder: Reminder, now: datetime, timezone: str) -> datetime:
+    zone = ZoneInfo(timezone)
+    days = [Weekday(day) for day in reminder.repeat_days or ()]
+    at = reminder.remind_at.astimezone(zone).time()
+    return next_occurrence(days, at, now.astimezone(zone))

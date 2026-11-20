@@ -10,7 +10,7 @@ import { AudioPlayer } from '../voice/audio-player';
   imports: [RouterLink],
   templateUrl: './dev-chat.html',
   styleUrl: './dev-chat.scss',
-  providers: [CompanionSession, PushToTalk],
+  providers: [PushToTalk],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DevChat {
@@ -21,7 +21,7 @@ export class DevChat {
   protected readonly kindLabels: Record<ActionKind, string> = {
     task: 'Task',
     reminder: 'Reminder',
-    workout_plan: 'Workout plan',
+    weekly_plan: 'Weekly plan',
   };
 
   protected send(): void {

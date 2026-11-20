@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, booleanAttribute, input, output } f
 import { Button } from '../ui/button';
 import { Icon } from '../ui/icon';
 import { Reminder } from './plans.service';
+import { repeatLabel } from './repeat';
 
 @Component({
   selector: '[app-reminder-item]',
@@ -11,7 +12,11 @@ import { Reminder } from './plans.service';
     <span class="time">
       {{ reminder().remind_at | date: 'h:mm a' }}
       <span class="pixel-label">
-        {{ reminder().delivered ? 'SENT' : (reminder().remind_at | date: 'EEE d MMM') }}
+        @if (reminder().repeat_days; as days) {
+          {{ repeats(days) }}
+        } @else {
+          {{ reminder().delivered ? 'SENT' : (reminder().remind_at | date: 'EEE d MMM') }}
+        }
       </span>
     </span>
     <span class="main">{{ reminder().title }}</span>
@@ -35,4 +40,6 @@ export class ReminderItem {
   readonly reminder = input.required<Reminder>();
   readonly removable = input(false, { transform: booleanAttribute });
   readonly removed = output();
+
+  protected readonly repeats = repeatLabel;
 }

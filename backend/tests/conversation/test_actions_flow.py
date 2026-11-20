@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from companion.actions.service import UNCLEAR_DETAILS, Proposal, Rejection, Resolution
+from companion.actions.service import (
+    UNCLEAR_DETAILS,
+    Proposal,
+    ProposedItem,
+    Rejection,
+    Resolution,
+)
 from companion.actions.tools import TOOLS
 from companion.conversation.personality import Personality
 from companion.conversation.safety import Mode
@@ -13,19 +19,26 @@ from companion.db.models import ActionKind, ActionStatus
 from companion.llm import ChatMessage, LLMReply, ToolCall, ToolCallError
 from companion.llm.fake import FakeLLM
 
-REMINDER_CALL = ToolCall("create_reminder", '{"title": "call mom", "when": "tomorrow at 6pm"}')
-PROPOSAL = Proposal(uuid.uuid4(), ActionKind.REMINDER, "a reminder to call mom, tomorrow at 6 PM")
+REMINDER_CALL = ToolCall(
+    "add_tasks_and_reminders", '{"reminders": [{"title": "call mom", "when": "tomorrow at 6pm"}]}'
+)
+TASK_CALL = ToolCall("add_tasks_and_reminders", '{"tasks": [{"title": "buy milk"}]}')
+PROPOSAL = Proposal(
+    uuid.uuid4(), (ProposedItem(ActionKind.REMINDER, "a reminder to call mom, tomorrow at 6 PM"),)
+)
 
 
 @dataclass
 class FakeActions:
     outcome: Proposal | Rejection = PROPOSAL
     pending_id: uuid.UUID | None = None
+    saved_id: uuid.UUID | None = None
     proposed: list[ToolCall] = field(default_factory=list)
     resolved: list[tuple[uuid.UUID, bool]] = field(default_factory=list)
+    undone: list[uuid.UUID] = field(default_factory=list)
 
-    async def propose(self, call: ToolCall) -> Proposal | Rejection:
-        self.proposed.append(call)
+    async def propose(self, calls: Sequence[ToolCall]) -> Proposal | Rejection:
+        self.proposed.extend(calls)
         if isinstance(self.outcome, Proposal):
             self.pending_id = self.outcome.action_id
         return self.outcome
@@ -37,7 +50,15 @@ class FakeActions:
         self.resolved.append((action_id, confirm))
         self.pending_id = None
         status = ActionStatus.CONFIRMED if confirm else ActionStatus.CANCELLED
-        return Resolution(action_id, ActionKind.REMINDER, status, f"resolved {status}")
+        return Resolution(action_id, status, f"resolved {status}")
+
+    async def last_saved(self) -> uuid.UUID | None:
+        return self.saved_id
+
+    async def undo(self, action_id: uuid.UUID) -> Resolution:
+        self.undone.append(action_id)
+        self.saved_id = None
+        return Resolution(action_id, ActionStatus.UNDONE, "undone")
 
 
 def llm_calling(*calls: ToolCall, mode: str = "normal") -> FakeLLM:
@@ -61,7 +82,7 @@ async def test_a_tool_call_becomes_a_proposal_read_back_by_code(personality: Per
 
     assert turn.proposal == PROPOSAL
     assert turn.reply == PROPOSAL.question
-    assert actions.proposed == [REMINDER_CALL]
+    assert actions.proposed == [REMINDER_CALL, REMINDER_CALL]
     system, tools = reply_calls(llm)[0]
     assert TOOLS_GUIDE in system
     assert tools == TOOLS
@@ -139,3 +160,66 @@ async def test_a_malformed_tool_call_asks_the_user_to_rephrase(personality: Pers
     assert turn.reply == UNCLEAR_DETAILS
     assert turn.proposal is None
     assert conversation.history[-1].content == UNCLEAR_DETAILS
+
+
+async def test_every_tool_call_in_a_reply_is_proposed_together(personality: Personality) -> None:
+    actions = FakeActions()
+
+    await Conversation(llm_calling(TASK_CALL, REMINDER_CALL), personality, actions).respond(
+        "add buy milk and remind me to call mom at 6"
+    )
+
+    assert actions.proposed == [TASK_CALL, REMINDER_CALL]
+
+
+async def test_saying_undo_takes_back_what_was_just_saved(personality: Personality) -> None:
+    saved = uuid.uuid4()
+    actions = FakeActions(saved_id=saved)
+    llm = llm_calling()
+
+    turn = await Conversation(llm, personality, actions).respond("undo that")
+
+    assert actions.undone == [saved]
+    assert turn.resolution is not None
+    assert turn.resolution.status is ActionStatus.UNDONE
+    assert llm.calls == []
+
+
+async def test_undo_with_nothing_recent_is_just_conversation(personality: Personality) -> None:
+    actions = FakeActions()
+
+    turn = await Conversation(llm_calling(), personality, actions).respond("undo")
+
+    assert actions.undone == []
+    assert turn.reply == "Sure thing!"
+
+
+async def test_undo_while_something_waits_for_an_answer_cancels_it(
+    personality: Personality,
+) -> None:
+    actions = FakeActions(pending_id=PROPOSAL.action_id, saved_id=uuid.uuid4())
+
+    await Conversation(llm_calling(), personality, actions).respond("undo")
+
+    assert actions.resolved == [(PROPOSAL.action_id, False)]
+    assert actions.undone == []
+
+
+async def test_an_early_normal_draft_is_dropped_when_the_mode_is_not_normal(
+    personality: Personality,
+) -> None:
+    llm = llm_calling(mode="supportive")
+
+    turn = await Conversation(llm, personality, FakeActions()).respond("today was a lot")
+
+    assert turn.mode is Mode.SUPPORTIVE
+    final_system, _ = reply_calls(llm)[-1]
+    assert personality.system_prompt(Mode.SUPPORTIVE, teasing_allowed=True) in final_system
+
+
+async def test_an_obvious_crisis_never_starts_a_normal_draft(personality: Personality) -> None:
+    llm = llm_calling(REMINDER_CALL)
+
+    await Conversation(llm, personality, FakeActions()).respond("I can't cope anymore")
+
+    assert len(reply_calls(llm)) == 1

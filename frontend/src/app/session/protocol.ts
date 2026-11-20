@@ -1,6 +1,6 @@
 export type Mode = 'normal' | 'supportive' | 'crisis';
-export type ActionKind = 'task' | 'reminder' | 'workout_plan';
-export type ActionStatus = 'pending' | 'confirmed' | 'cancelled' | 'expired';
+export type ActionKind = 'task' | 'reminder' | 'weekly_plan';
+export type ActionStatus = 'pending' | 'confirmed' | 'cancelled' | 'expired' | 'undone';
 
 export interface UserMessageEvent {
   type: 'user_message';
@@ -11,6 +11,11 @@ export interface ResolveActionEvent {
   type: 'resolve_action';
   id: string;
   confirm: boolean;
+}
+
+export interface UndoActionEvent {
+  type: 'undo_action';
+  id: string;
 }
 
 export interface StatusEvent {
@@ -30,11 +35,15 @@ export interface AssistantMessageEvent {
   teasing_allowed: boolean;
 }
 
+export interface PendingItem {
+  kind: ActionKind;
+  summary: string;
+}
+
 export interface PendingActionEvent {
   type: 'pending_action';
   id: string;
-  kind: ActionKind;
-  summary: string;
+  items: PendingItem[];
 }
 
 export interface ActionResolvedEvent {
@@ -68,6 +77,6 @@ export type ServerEvent =
   | ActionResolvedEvent
   | ReminderDueEvent
   | ErrorEvent;
-export type ClientEvent = UserMessageEvent | ResolveActionEvent;
+export type ClientEvent = UserMessageEvent | ResolveActionEvent | UndoActionEvent;
 export type Incoming = ServerEvent | AudioFrame;
 export type Outgoing = ClientEvent | Blob;

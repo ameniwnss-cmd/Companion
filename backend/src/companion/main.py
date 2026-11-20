@@ -13,6 +13,7 @@ from companion.config import Settings, get_settings
 from companion.conversation.personality import Personality
 from companion.db.session import create_engine, create_session_factory
 from companion.embeddings import Embedder
+from companion.embeddings import warm_up as warm_up_embedder
 from companion.llm import LLMProvider
 from companion.llm.factory import (
     build_embedder,
@@ -63,14 +64,15 @@ def create_app(
         try:
             async with httpx.AsyncClient(timeout=settings.llm_timeout_seconds) as http:
                 app.state.llm = llm or build_llm(settings, http)
-                app.state.memory = MemoryService(
-                    sessions, embedder or build_embedder(settings, http)
-                )
+                memory_embedder = embedder or build_embedder(settings, http)
+                app.state.memory = MemoryService(sessions, memory_embedder)
                 app.state.listener = listener or build_speech_to_text(settings, http)
                 app.state.voice = voice or build_text_to_speech(settings)
-                warm_up = asyncio.create_task(app.state.voice.warm_up())
+                warm_ups = asyncio.gather(
+                    app.state.voice.warm_up(), warm_up_embedder(memory_embedder)
+                )
                 yield
-                await warm_up
+                await warm_ups
         finally:
             stop.set()
             if loop_task is not None:

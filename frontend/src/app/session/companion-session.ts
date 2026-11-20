@@ -3,11 +3,11 @@ import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { environment } from '../../environments/environment';
 import { AudioPlayer } from '../voice/audio-player';
 import {
-  ActionKind,
   ActionStatus,
   Incoming,
   Mode,
   Outgoing,
+  PendingItem,
   ServerEvent,
   StatusEvent,
 } from './protocol';
@@ -19,8 +19,7 @@ export type ChatEntry =
       id: number;
       from: 'action';
       actionId: string;
-      kind: ActionKind;
-      summary: string;
+      items: readonly PendingItem[];
       status: ActionStatus;
     }
   | { id: number; from: 'reminder'; text: string }
@@ -55,19 +54,24 @@ export function sessionUrl(base: string, timeZone: string): string {
   return `${base}?tz=${encodeURIComponent(timeZone)}&speak=true`;
 }
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class CompanionSession {
-  private readonly socket = inject(SOCKET_FACTORY)(
-    sessionUrl(inject(COMPANION_URL), Intl.DateTimeFormat().resolvedOptions().timeZone),
-  );
+  private readonly base = inject(COMPANION_URL);
+  private readonly socket = this.base
+    ? inject(SOCKET_FACTORY)(
+        sessionUrl(this.base, Intl.DateTimeFormat().resolvedOptions().timeZone),
+      )
+    : null;
   private readonly player = inject(AudioPlayer);
   private nextId = 0;
 
   private readonly _entries = signal<readonly ChatEntry[]>([]);
   private readonly _state = signal<ConnectionState>('connecting');
+  private readonly _plansVersion = signal(0);
 
   readonly entries = this._entries.asReadonly();
   readonly state = this._state.asReadonly();
+  readonly plansVersion = this._plansVersion.asReadonly();
   readonly canSend = computed(() => this._state() === 'idle' || this._state() === 'connecting');
   readonly lastHeard = computed(() => this.latest('user'));
   readonly lastSaid = computed(() => this.latest('companion'));
@@ -75,10 +79,18 @@ export class CompanionSession {
     const action = this.latest('action');
     return action?.status === 'pending' ? action : null;
   });
+  readonly lastSaved = computed(() => {
+    const action = this.latest('action');
+    return action?.status === 'confirmed' ? action : null;
+  });
   readonly lastReminder = computed(() => this.latest('reminder'));
   readonly lastProblem = computed(() => this.latest('system'));
 
   constructor() {
+    if (!this.socket) {
+      this._state.set('closed');
+      return;
+    }
     const subscription = this.socket.subscribe({
       next: (event) => this.handle(event as Incoming),
       error: () => this.close('Connection lost. Is the backend running?'),
@@ -97,7 +109,7 @@ export class CompanionSession {
     }
     this.player.stop();
     this.add({ from: 'user', text: trimmed, spoken: false });
-    this.socket.next({ type: 'user_message', text: trimmed });
+    this.socket?.next({ type: 'user_message', text: trimmed });
   }
 
   sendRecording(recording: Blob): void {
@@ -105,14 +117,21 @@ export class CompanionSession {
       return;
     }
     this.player.stop();
-    this.socket.next(recording);
+    this.socket?.next(recording);
   }
 
   resolve(actionId: string, confirm: boolean): void {
     if (!this.canSend()) {
       return;
     }
-    this.socket.next({ type: 'resolve_action', id: actionId, confirm });
+    this.socket?.next({ type: 'resolve_action', id: actionId, confirm });
+  }
+
+  undo(actionId: string): void {
+    if (!this.canSend()) {
+      return;
+    }
+    this.socket?.next({ type: 'undo_action', id: actionId });
   }
 
   reportProblem(text: string): void {
@@ -142,8 +161,7 @@ export class CompanionSession {
         this.add({
           from: 'action',
           actionId: event.id,
-          kind: event.kind,
-          summary: event.summary,
+          items: event.items,
           status: 'pending',
         });
         break;
@@ -155,9 +173,13 @@ export class CompanionSession {
               : entry,
           ),
         );
+        if (event.status === 'confirmed' || event.status === 'undone') {
+          this._plansVersion.update((version) => version + 1);
+        }
         break;
       case 'reminder_due':
         this.add({ from: 'reminder', text: event.text });
+        this._plansVersion.update((version) => version + 1);
         break;
       case 'error':
         this.add({ from: 'system', text: event.detail });

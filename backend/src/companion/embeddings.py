@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import math
 import re
 from collections.abc import Sequence
@@ -8,7 +9,10 @@ import httpx
 
 from companion.llm import LLMError
 
+logger = logging.getLogger(__name__)
+
 EMBEDDING_DIMENSIONS = 384
+KEEP_LOADED = "24h"
 
 _WORD = re.compile(r"[a-z0-9']+")
 
@@ -50,7 +54,8 @@ class OllamaEmbedder:
             return []
         try:
             response = await self._http.post(
-                self._url, json={"model": self._model, "input": list(texts)}
+                self._url,
+                json={"model": self._model, "input": list(texts), "keep_alive": KEEP_LOADED},
             )
             response.raise_for_status()
             vectors = response.json()["embeddings"]
@@ -60,3 +65,10 @@ class OllamaEmbedder:
         if len(vectors) != len(texts) or any(len(v) != EMBEDDING_DIMENSIONS for v in vectors):
             raise EmbeddingError(f"Expected {len(texts)} vectors of {EMBEDDING_DIMENSIONS} numbers")
         return [_normalised([float(value) for value in vector]) for vector in vectors]
+
+
+async def warm_up(embedder: Embedder) -> None:
+    try:
+        await embedder.embed(["warm up"])
+    except EmbeddingError:
+        logger.warning("Warming up the embedding model failed", exc_info=True)

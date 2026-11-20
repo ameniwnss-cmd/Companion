@@ -4,7 +4,8 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { environment } from '../../environments/environment';
-import { Reminder, Task } from '../plans/plans.service';
+import { Reminder, Task, WeeklyPlan } from '../plans/plans.service';
+import { weekdayOf } from '../plans/repeat';
 import { SOCKET_FACTORY } from '../session/companion-session';
 import { FakePlayer, FakeSocket } from '../session/testing/fakes';
 import { AudioPlayer } from '../voice/audio-player';
@@ -33,10 +34,24 @@ function today(hour: number): string {
   return date.toISOString();
 }
 
-const OPEN: Task = { id: 't1', title: 'Stretch', due_at: null, done: false, created_at: today(8) };
+const OPEN: Task = {
+  id: 't1',
+  title: 'Stretch',
+  due_at: null,
+  repeat_days: null,
+  time_of_day: null,
+  done: false,
+  created_at: today(8),
+};
 const DONE: Task = { ...OPEN, id: 't2', title: 'Breakfast', done: true };
 const LATER: Task = { ...OPEN, id: 't3', title: 'Tax return', due_at: '2099-01-01T09:00:00Z' };
-const REMINDER: Reminder = { id: 'r1', title: 'Call mom', remind_at: today(23), delivered: false };
+const REMINDER: Reminder = {
+  id: 'r1',
+  title: 'Call mom',
+  remind_at: today(23),
+  repeat_days: null,
+  delivered: false,
+};
 
 describe('Room', () => {
   let socket: FakeSocket;
@@ -49,10 +64,14 @@ describe('Room', () => {
     await fixture.whenStable();
   }
 
-  async function load(tasks: Task[], reminders: Reminder[]): Promise<void> {
+  async function load(
+    tasks: Task[],
+    reminders: Reminder[],
+    plans: WeeklyPlan[] = [],
+  ): Promise<void> {
     http.expectOne(`${API}/tasks`).flush(tasks);
     http.expectOne(`${API}/reminders`).flush(reminders);
-    http.expectOne(`${API}/workout-plans`).flush([]);
+    http.expectOne(`${API}/weekly-plans`).flush(plans);
     await settle();
   }
 
@@ -102,11 +121,32 @@ describe('Room', () => {
   it('refreshes the lists after the user confirms a new plan', async () => {
     await load([], []);
 
-    socket.emit({ type: 'pending_action', id: 'a1', kind: 'task', summary: 'Stretch' });
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'task', summary: 'Stretch' }],
+    });
     socket.emit({ type: 'action_resolved', id: 'a1', status: 'confirmed' });
     await settle();
     await load([OPEN], []);
 
     expect(page.querySelector('[data-testid="today-task"]')?.textContent).toContain('Stretch');
+  });
+
+  it("puts today's weekly plan activity at the top of today's quests", async () => {
+    const plan: WeeklyPlan = {
+      id: 'p1',
+      name: 'Job hunt',
+      created_at: today(8),
+      sessions: [{ day: weekdayOf(new Date()), activity: 'polish the portfolio', minutes: null }],
+    };
+
+    await load([OPEN], [], [plan]);
+
+    expect(page.querySelector('[data-testid="today-plan"]')?.textContent).toContain(
+      'polish the portfolio',
+    );
+    expect(page.textContent).toContain('Job hunt');
+    expect(page.querySelector('[data-testid="today-task"]')).not.toBeNull();
   });
 });

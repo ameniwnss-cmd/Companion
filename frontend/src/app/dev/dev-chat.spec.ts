@@ -108,7 +108,11 @@ describe('DevChat', () => {
   });
 
   it('lets the user save or cancel a proposed action from its card', async () => {
-    socket.emit({ type: 'pending_action', id: 'a1', kind: 'reminder', summary: 'call mom at 6' });
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'reminder', summary: 'call mom at 6' }],
+    });
     await fixture.whenStable();
 
     const card = page.querySelector('[data-testid="action-card"]') as HTMLElement;

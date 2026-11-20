@@ -19,6 +19,12 @@ from companion.actions.answers import Answer, classify_answer
         "perfect thanks",
         "please do",
         "yes please save it",
+        "Yes, David.",
+        "Yeah, do that.",
+        "Oh yeah, that's right",
+        "sure thing",
+        "yes yes yes yes yes yes",
+        "save them all",
     ],
 )
 def test_yes(text: str) -> None:
@@ -40,6 +46,8 @@ def test_yes(text: str) -> None:
         "don\N{RIGHT SINGLE QUOTATION MARK}t save it",
         "forget it",
         "scrap that",
+        "No, David.",
+        "um no",
     ],
 )
 def test_no(text: str) -> None:
@@ -48,13 +56,24 @@ def test_no(text: str) -> None:
 
 @pytest.mark.parametrize(
     "text",
+    ["undo", "Undo that.", "take it back", "take that back please", "uh, undo it"],
+)
+def test_undo(text: str) -> None:
+    assert classify_answer(text) is Answer.UNDO
+
+
+@pytest.mark.parametrize(
+    "text",
     [
         "",
         "yes but make it 7pm",
         "no, make it 7pm instead",
+        "okay and also remind me to buy milk",
+        "yeah, add another one for Friday",
         "what time did you say?",
         "I went to the gym today",
-        "yes yes yes yes yes yes",
+        "yes I think I will go to the gym later tonight",
+        "hmm",
     ],
 )
 def test_anything_else_is_not_an_answer(text: str) -> None:

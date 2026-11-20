@@ -16,7 +16,9 @@ from companion.llm import ChatMessage, LLMReply, RateLimitedError, ToolCall
 from companion.llm.fake import FakeLLM
 from companion.main import create_app
 
-REMINDER_CALL = ToolCall("create_reminder", '{"title": "call mom", "when": "tomorrow at 6pm"}')
+REMINDER_CALL = ToolCall(
+    "add_tasks_and_reminders", '{"reminders": [{"title": "call mom", "when": "tomorrow at 6pm"}]}'
+)
 
 
 def assistant(messages: Sequence[ChatMessage], json_mode: bool) -> str | LLMReply:
@@ -76,7 +78,9 @@ async def test_a_reminder_is_proposed_then_saved_when_the_user_says_yes(
 
     assert question["text"].startswith("Got it, a reminder to call mom, tomorrow at")
     assert pending["type"] == "pending_action"
-    assert pending["kind"] == "reminder"
+    [item] = pending["items"]
+    assert item["kind"] == "reminder"
+    assert item["summary"].startswith("a reminder to call mom, tomorrow at")
     assert await saved_reminders(sessions) == []
 
     send(ws, type="user_message", text="yes")
@@ -99,6 +103,29 @@ async def test_the_confirmation_card_can_cancel(
     assert message["text"] == "Okay, I scrapped it."
     assert resolved["status"] == "cancelled"
     assert await saved_reminders(sessions) == []
+
+
+async def test_the_undo_button_takes_back_a_saved_action(
+    ws: WebSocketTestSession, sessions: SessionFactory
+) -> None:
+    send(ws, type="user_message", text="remind me to call mom tomorrow at 6pm")
+    _, pending = receive_turn(ws)
+    send(ws, type="resolve_action", id=pending["id"], confirm=True)
+    receive_turn(ws)
+    assert [r.title for r in await saved_reminders(sessions)] == ["call mom"]
+
+    send(ws, type="undo_action", id=pending["id"])
+    message, resolved = receive_turn(ws)
+
+    assert message["text"] == "Done, I took it back."
+    assert resolved == {"type": "action_resolved", "id": pending["id"], "status": "undone"}
+    assert await saved_reminders(sessions) == []
+
+
+def test_undoing_an_unknown_action_is_an_error(ws: WebSocketTestSession) -> None:
+    send(ws, type="undo_action", id="00000000-0000-0000-0000-000000000000")
+
+    assert receive_turn(ws) == [{"type": "error", "detail": "That action doesn't exist"}]
 
 
 def test_resolving_an_unknown_action_is_an_error(ws: WebSocketTestSession) -> None:

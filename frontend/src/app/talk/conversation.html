@@ -26,8 +26,12 @@
     aria-labelledby="pending-title"
     data-testid="pending-action"
   >
-    <p class="pixel-label" id="pending-title">{{ kindLabels[action.kind] }}</p>
-    <p class="summary">{{ action.summary }}</p>
+    <p class="pixel-label" id="pending-title">{{ cardTitle(action.items) }}</p>
+    <ul class="items">
+      @for (item of action.items; track $index) {
+        <li><app-icon [name]="kindIcons[item.kind]" />{{ item.summary }}</li>
+      }
+    </ul>
     <div class="actions">
       <button
         app-button
@@ -36,7 +40,7 @@
         [disabled]="!session.canSend()"
         (click)="session.resolve(action.actionId, true)"
       >
-        <app-icon name="check" />Save
+        <app-icon name="check" />{{ action.items.length === 1 ? 'Save' : 'Save all' }}
       </button>
       <button
         app-button
@@ -50,16 +54,25 @@
   </div>
 }
 
-@if (reminder(); as due) {
-  <div app-panel class="toast" role="status" data-testid="reminder">
-    <app-icon name="bell" />
-    <span>{{ due.text }}</span>
+@if (saved(); as done) {
+  <div app-panel class="toast saved" role="status" data-testid="saved">
+    <app-icon name="check" />
+    <span>{{ savedLabel(done.items) }}. Say “undo” if that was wrong.</span>
     <button
       app-button
       variant="ghost"
       type="button"
-      aria-label="Dismiss reminder"
-      (click)="dismissReminder(due.id)"
+      [disabled]="!session.canSend()"
+      (click)="session.undo(done.actionId)"
+    >
+      <app-icon name="undo" />Undo
+    </button>
+    <button
+      app-button
+      variant="ghost"
+      type="button"
+      aria-label="Dismiss"
+      (click)="dismissSaved(done.id)"
     >
       <app-icon name="close" />
     </button>
@@ -71,19 +84,46 @@
 }
 
 <div class="controls">
+  @if (handsFree.on()) {
+    <button
+      app-button
+      variant="primary"
+      type="button"
+      class="talk"
+      [class.listening]="handsFree.hearing()"
+      (click)="handsFree.stop()"
+    >
+      <app-icon name="mic" />End hands-free
+    </button>
+  } @else {
+    <button
+      app-button
+      variant="primary"
+      type="button"
+      class="talk"
+      [class.listening]="talk.recording()"
+      [disabled]="orbState() === 'offline'"
+      [attr.aria-pressed]="talk.recording()"
+      (pointerdown)="talk.start()"
+      (pointerup)="talk.stop()"
+      (pointerleave)="talk.stop()"
+    >
+      <app-icon name="mic" />{{ talk.recording() ? 'Listening…' : 'Hold to talk' }}
+    </button>
+  }
   <button
     app-button
-    variant="primary"
+    variant="tool"
     type="button"
-    class="talk"
-    [class.listening]="talk.recording()"
-    [disabled]="orbState() === 'offline'"
-    [attr.aria-pressed]="talk.recording()"
-    (pointerdown)="talk.start()"
-    (pointerup)="talk.stop()"
-    (pointerleave)="talk.stop()"
+    class="hands-free"
+    [class.active]="handsFree.on()"
+    [disabled]="handsFree.starting() || orbState() === 'offline'"
+    [attr.aria-pressed]="handsFree.on()"
+    [attr.aria-label]="handsFree.on() ? 'Turn hands-free off' : 'Turn hands-free on'"
+    [attr.title]="handsFree.on() ? 'Turn hands-free off' : 'Hands-free: just talk'"
+    (click)="handsFree.toggle()"
   >
-    <app-icon name="mic" />{{ talk.recording() ? 'Listening…' : 'Hold to talk' }}
+    <app-icon name="lock" />
   </button>
   <button
     app-button

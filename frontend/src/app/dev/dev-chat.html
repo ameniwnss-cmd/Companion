@@ -11,8 +11,10 @@
       @switch (entry.from) {
         @case ('action') {
           <li class="entry action" [class]="entry.status" data-testid="action-card">
-            <p class="kind">{{ kindLabels[entry.kind] }}</p>
-            <p class="text">{{ entry.summary }}</p>
+            @for (item of entry.items; track $index) {
+              <p class="kind">{{ kindLabels[item.kind] }}</p>
+              <p class="text">{{ item.summary }}</p>
+            }
             @if (entry.status === 'pending') {
               <p class="actions">
                 <button

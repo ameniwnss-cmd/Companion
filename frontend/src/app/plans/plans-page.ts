@@ -48,7 +48,7 @@ export class PlansPage implements OnInit {
       !this.plans.error() &&
       this.plans.tasks().length +
         this.plans.reminders().length +
-        this.plans.workoutPlans().length ===
+        this.plans.weeklyPlans().length ===
         0,
   );
 

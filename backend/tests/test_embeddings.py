@@ -8,9 +8,11 @@ from pydantic import SecretStr
 from companion.config import EmbeddingProviderName, Settings
 from companion.embeddings import (
     EMBEDDING_DIMENSIONS,
+    KEEP_LOADED,
     EmbeddingError,
     FakeEmbedder,
     OllamaEmbedder,
+    warm_up,
 )
 from companion.llm.factory import build_embedder
 
@@ -43,7 +45,7 @@ async def test_ollama_embeds_a_batch_and_normalises() -> None:
 
     vectors = await ollama(httpx.MockTransport(handler)).embed(["a", "b"])
 
-    assert bodies == [{"model": "mini", "input": ["a", "b"]}]
+    assert bodies == [{"model": "mini", "input": ["a", "b"], "keep_alive": KEEP_LOADED}]
     assert len(vectors) == 2
     assert math.isclose(vectors[0][0], 1 / math.sqrt(EMBEDDING_DIMENSIONS))
 
@@ -77,3 +79,22 @@ def test_builds_the_configured_embedder(provider: EmbeddingProviderName, expecte
     settings = Settings(embedding_provider=provider, groq_api_key=SecretStr("k"), _env_file=None)
 
     assert isinstance(build_embedder(settings, httpx.AsyncClient()), expected)
+
+
+async def test_warming_up_loads_the_model_once() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"embeddings": [[1.0] * EMBEDDING_DIMENSIONS]})
+
+    await warm_up(ollama(httpx.MockTransport(handler)))
+
+    assert len(requests) == 1
+
+
+async def test_a_failed_warm_up_does_not_stop_the_app() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    await warm_up(ollama(httpx.MockTransport(handler)))

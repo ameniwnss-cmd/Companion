@@ -1,12 +1,12 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 
 from companion.api.dev_user import DevUserId
-from companion.db.models import Reminder, Task, WorkoutPlan
+from companion.db.models import Reminder, Task, WeeklyPlan
 from companion.plans.service import ItemNotFoundError, Owned, PlansService
 
 router = APIRouter(prefix="/dev", tags=["dev"])
@@ -16,6 +16,8 @@ class TaskOut(BaseModel):
     id: uuid.UUID
     title: str
     due_at: datetime | None
+    repeat_days: list[str] | None
+    time_of_day: time | None
     done: bool
     created_at: datetime
 
@@ -30,10 +32,11 @@ class ReminderOut(BaseModel):
     id: uuid.UUID
     title: str
     remind_at: datetime
+    repeat_days: list[str] | None
     delivered: bool
 
 
-class WorkoutPlanOut(BaseModel):
+class WeeklyPlanOut(BaseModel):
     id: uuid.UUID
     name: str
     sessions: list[dict[str, Any]]
@@ -90,14 +93,14 @@ async def delete_reminder(reminder_id: uuid.UUID, plans: Plans, user_id: DevUser
     await _remove(plans, Reminder, user_id, reminder_id)
 
 
-@router.get("/workout-plans")
-async def list_workout_plans(plans: Plans, user_id: DevUserId) -> list[WorkoutPlanOut]:
+@router.get("/weekly-plans")
+async def list_weekly_plans(plans: Plans, user_id: DevUserId) -> list[WeeklyPlanOut]:
     return [
-        WorkoutPlanOut.model_validate(p, from_attributes=True)
-        for p in await plans.workout_plans(user_id)
+        WeeklyPlanOut.model_validate(p, from_attributes=True)
+        for p in await plans.weekly_plans(user_id)
     ]
 
 
-@router.delete("/workout-plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_workout_plan(plan_id: uuid.UUID, plans: Plans, user_id: DevUserId) -> None:
-    await _remove(plans, WorkoutPlan, user_id, plan_id)
+@router.delete("/weekly-plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_weekly_plan(plan_id: uuid.UUID, plans: Plans, user_id: DevUserId) -> None:
+    await _remove(plans, WeeklyPlan, user_id, plan_id)

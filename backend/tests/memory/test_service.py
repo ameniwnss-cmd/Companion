@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -192,3 +193,24 @@ async def test_learning_waits_until_released(memory: MemoryService, user: User) 
     gateway.release()
     await gateway.settle()
     assert [m.content for m in await memory.list(user.id)] == [GOAL.content]
+
+
+class CountingEmbedder(FakeEmbedder):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        self.calls += 1
+        return await super().embed(texts)
+
+
+async def test_waking_loads_the_embedding_model_in_the_background(
+    sessions: SessionFactory, user: User
+) -> None:
+    embedder = CountingEmbedder()
+    mine = UserMemory(MemoryService(sessions, embedder), user.id)
+
+    mine.wake()
+    await mine.settle()
+
+    assert embedder.calls == 1

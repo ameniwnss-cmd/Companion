@@ -88,15 +88,18 @@ describe('CompanionSession', () => {
   });
 
   it('shows a proposed action as a pending card, then updates it when resolved', () => {
-    socket.emit({ type: 'pending_action', id: 'a1', kind: 'reminder', summary: 'call mom at 6' });
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'reminder', summary: 'call mom at 6' }],
+    });
 
     expect(chat.entries()).toEqual([
       {
         id: 0,
         from: 'action',
         actionId: 'a1',
-        kind: 'reminder',
-        summary: 'call mom at 6',
+        items: [{ kind: 'reminder', summary: 'call mom at 6' }],
         status: 'pending',
       },
     ]);
@@ -107,8 +110,8 @@ describe('CompanionSession', () => {
   });
 
   it('only updates the card that was resolved', () => {
-    socket.emit({ type: 'pending_action', id: 'a1', kind: 'task', summary: 'first' });
-    socket.emit({ type: 'pending_action', id: 'a2', kind: 'task', summary: 'second' });
+    socket.emit({ type: 'pending_action', id: 'a1', items: [{ kind: 'task', summary: 'first' }] });
+    socket.emit({ type: 'pending_action', id: 'a2', items: [{ kind: 'task', summary: 'second' }] });
 
     socket.emit({ type: 'action_resolved', id: 'a1', status: 'cancelled' });
 
@@ -122,6 +125,43 @@ describe('CompanionSession', () => {
     chat.resolve('a1', false);
 
     expect(socket.sent).toEqual([{ type: 'resolve_action', id: 'a1', confirm: false }]);
+  });
+
+  it('sends an undo event for a saved action', () => {
+    chat.undo('a1');
+
+    expect(socket.sent).toEqual([{ type: 'undo_action', id: 'a1' }]);
+  });
+
+  it('remembers the last saved action until it is undone', () => {
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'task', summary: 'buy milk' }],
+    });
+    expect(chat.lastSaved()).toBeNull();
+
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'confirmed' });
+    expect(chat.lastSaved()).toMatchObject({ actionId: 'a1' });
+
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'undone' });
+    expect(chat.lastSaved()).toBeNull();
+  });
+
+  it('counts every change to the saved plans', () => {
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'task', summary: 'buy milk' }],
+    });
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'cancelled' });
+    expect(chat.plansVersion()).toBe(0);
+
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'confirmed' });
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'undone' });
+    socket.emit({ type: 'reminder_due', id: 'r1', title: 'water', text: 'Drink water.' });
+
+    expect(chat.plansVersion()).toBe(3);
   });
 
   it('does not resolve while the companion is thinking', () => {

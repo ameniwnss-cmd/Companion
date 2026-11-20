@@ -1,6 +1,11 @@
 import { signal } from '@angular/core';
 import { Observer, Subject, Subscription } from 'rxjs';
 import { WebSocketSubject } from 'rxjs/webSocket';
+import {
+  VoiceDetector,
+  VoiceDetectorEvents,
+  VoiceDetectorFactory,
+} from '../../voice/voice-detector';
 import { SocketFactory } from '../companion-session';
 import { Incoming, Outgoing } from '../protocol';
 
@@ -44,5 +49,43 @@ export class FakePlayer {
 
   stop(): void {
     this.stops += 1;
+  }
+
+  chimes = 0;
+
+  chime(): Promise<void> {
+    this.chimes += 1;
+    return Promise.resolve();
+  }
+}
+
+export class FakeDetector implements VoiceDetector {
+  events: VoiceDetectorEvents | null = null;
+  listening = false;
+  starts = 0;
+  blocked = false;
+
+  readonly factory: VoiceDetectorFactory = (events) => {
+    if (this.blocked) {
+      return Promise.reject(new Error('denied'));
+    }
+    this.events = events;
+    return Promise.resolve(this);
+  };
+
+  start(): Promise<void> {
+    this.listening = true;
+    this.starts += 1;
+    return Promise.resolve();
+  }
+
+  pause(): Promise<void> {
+    this.listening = false;
+    return Promise.resolve();
+  }
+
+  destroy(): Promise<void> {
+    this.listening = false;
+    return Promise.resolve();
   }
 }

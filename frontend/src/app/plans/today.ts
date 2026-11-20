@@ -1,4 +1,9 @@
-import { Reminder, Task } from './plans.service';
+import { PlanDay, Reminder, Task, WeeklyPlan } from './plans.service';
+import { weekdayOf } from './repeat';
+
+export interface TodayPlanItem extends PlanDay {
+  plan: string;
+}
 
 function dayBounds(now: Date): { start: number; end: number } {
   const start = new Date(now);
@@ -10,7 +15,16 @@ function dayBounds(now: Date): { start: number; end: number } {
 
 export function todayTasks(tasks: readonly Task[], now: Date): Task[] {
   const { end } = dayBounds(now);
-  return tasks.filter((t) => !t.done && (t.due_at === null || Date.parse(t.due_at) <= end));
+  const today = weekdayOf(now);
+  return tasks.filter((task) => {
+    if (task.done) {
+      return false;
+    }
+    if (task.repeat_days) {
+      return task.repeat_days.includes(today);
+    }
+    return task.due_at === null || Date.parse(task.due_at) <= end;
+  });
 }
 
 export function todayReminders(reminders: readonly Reminder[], now: Date): Reminder[] {
@@ -21,4 +35,11 @@ export function todayReminders(reminders: readonly Reminder[], now: Date): Remin
       return at >= start && at <= end;
     })
     .sort((a, b) => Date.parse(a.remind_at) - Date.parse(b.remind_at));
+}
+
+export function todayPlan(plans: readonly WeeklyPlan[], now: Date): TodayPlanItem[] {
+  const today = weekdayOf(now);
+  return plans.flatMap((plan) =>
+    plan.sessions.filter((day) => day.day === today).map((day) => ({ ...day, plan: plan.name })),
+  );
 }

@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 import time
 import uuid
@@ -38,8 +40,13 @@ class ResolveAction(BaseModel):
     confirm: bool
 
 
-ClientEvent = TypeAdapter[UserMessage | ResolveAction](
-    Annotated[UserMessage | ResolveAction, Field(discriminator="type")]
+class UndoAction(BaseModel):
+    type: Literal["undo_action"]
+    id: uuid.UUID
+
+
+ClientEvent = TypeAdapter[UserMessage | ResolveAction | UndoAction](
+    Annotated[UserMessage | ResolveAction | UndoAction, Field(discriminator="type")]
 )
 
 
@@ -60,11 +67,15 @@ class AssistantMessage(BaseModel):
     teasing_allowed: bool
 
 
+class PendingItem(BaseModel):
+    kind: ActionKind
+    summary: str
+
+
 class PendingActionEvent(BaseModel):
     type: Literal["pending_action"] = "pending_action"
     id: uuid.UUID
-    kind: ActionKind
-    summary: str
+    items: list[PendingItem]
 
 
 class ActionResolvedEvent(BaseModel):
@@ -96,11 +107,40 @@ class _Channel:
         self._listener = listener
         self._voice = voice
         self._max_audio_bytes = max_audio_bytes
+        self._turn = asyncio.Lock()
+        self._announcements: set[asyncio.Task[None]] = set()
 
     async def send(self, event: BaseModel) -> None:
         await self._ws.send_text(event.model_dump_json())
 
+    async def announce(self, message: str) -> None:
+        await self._ws.send_text(message)
+        said = str(json.loads(message)["text"])
+        self._conversation.note(said)
+        task = asyncio.create_task(self._say_when_free(said))
+        self._announcements.add(task)
+        task.add_done_callback(self._announcements.discard)
+
+    def close(self) -> None:
+        for task in self._announcements:
+            task.cancel()
+
+    async def _say_when_free(self, said: str) -> None:
+        async with self._turn:
+            if self._voice is None:
+                return
+            await self._speak(said)
+            await self.send(StatusEvent(state="idle"))
+
     async def handle_text(self, raw: str) -> None:
+        async with self._turn:
+            await self._handle_text(raw)
+
+    async def handle_audio(self, audio: bytes) -> None:
+        async with self._turn:
+            await self._handle_audio(audio)
+
+    async def _handle_text(self, raw: str) -> None:
         try:
             event = ClientEvent.validate_json(raw)
         except ValidationError:
@@ -110,22 +150,27 @@ class _Channel:
         await self.send(StatusEvent(state="thinking"))
         if isinstance(event, UserMessage):
             await self._reply_to(event.text)
-        else:
+        elif isinstance(event, ResolveAction):
             await self._resolve(event)
+        else:
+            await self._undo(event)
         await self.send(StatusEvent(state="idle"))
         self._memory.release()
 
-    async def handle_audio(self, audio: bytes) -> None:
+    async def _handle_audio(self, audio: bytes) -> None:
         if len(audio) > self._max_audio_bytes:
             await self.send(ErrorEvent(detail=TOO_LONG))
             return
 
         await self.send(StatusEvent(state="thinking"))
+        self._memory.wake()
+        started = time.perf_counter()
         try:
             transcript = await self._listener.transcribe(audio)
         except SpeechError:
             logger.warning("Transcription failed", exc_info=True)
             transcript = ""
+        logger.info("Transcribed in %.2fs", time.perf_counter() - started)
         if transcript:
             await self.send(UserTranscript(text=transcript))
             await self._reply_to(transcript)
@@ -155,6 +200,14 @@ class _Channel:
         else:
             await self._send_resolution(resolution, speak=True)
 
+    async def _undo(self, event: UndoAction) -> None:
+        try:
+            resolution = await self._actions.undo(event.id)
+        except ActionNotFoundError:
+            await self.send(ErrorEvent(detail="That action doesn't exist"))
+        else:
+            await self._send_resolution(resolution, speak=True)
+
     async def _send_turn(self, turn: Turn) -> None:
         if turn.resolution is not None:
             await self._send_resolution(turn.resolution, speak=False)
@@ -165,8 +218,10 @@ class _Channel:
             await self.send(
                 PendingActionEvent(
                     id=turn.proposal.action_id,
-                    kind=turn.proposal.kind,
-                    summary=turn.proposal.summary,
+                    items=[
+                        PendingItem(kind=item.kind, summary=item.summary)
+                        for item in turn.proposal.items
+                    ],
                 )
             )
         await self._speak(turn.reply)
@@ -228,7 +283,7 @@ async def dev_text_channel(
         state.voice if speak else None,
         state.settings.max_audio_bytes,
     )
-    disconnect = state.hub.connect(user.id, websocket.send_text)
+    disconnect = state.hub.connect(user.id, channel.announce)
     try:
         await state.reminders.dispatch_due()
         while True:
@@ -243,3 +298,4 @@ async def dev_text_channel(
         pass
     finally:
         disconnect()
+        channel.close()

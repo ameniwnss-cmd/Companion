@@ -27,6 +27,9 @@
 }
 
 .main .pixel-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   padding-left: 1.85rem;
 }
 

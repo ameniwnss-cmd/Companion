@@ -7,7 +7,7 @@
 >
   @if (empty()) {
     <app-empty>
-      Nothing planned yet. Ask your companion for a task, a reminder or a workout.
+      Nothing planned yet. Ask your companion for a task, a reminder or a weekly plan.
     </app-empty>
   } @else {
     @if (plans.tasks().length) {
@@ -41,18 +41,18 @@
           }
         </ul>
 
-        @if (plans.workoutPlans().length) {
-          <h2 class="training"><app-icon name="dumbbell" />Training plans</h2>
-          @for (plan of plans.workoutPlans(); track plan.id) {
-            <article class="plan" data-testid="workout-plan">
+        @if (plans.weeklyPlans().length) {
+          <h2 class="weekly"><app-icon name="calendar" />Weekly plans</h2>
+          @for (plan of plans.weeklyPlans(); track plan.id) {
+            <article class="plan" data-testid="weekly-plan">
               <header>
                 <h3>{{ plan.name }}</h3>
                 <button
                   app-button
                   variant="ghost"
                   type="button"
-                  [attr.aria-label]="'Delete workout plan ' + plan.name"
-                  (click)="plans.remove('workout-plans', plan.id)"
+                  [attr.aria-label]="'Delete weekly plan ' + plan.name"
+                  (click)="plans.remove('weekly-plans', plan.id)"
                 >
                   <app-icon name="trash" />
                 </button>
@@ -61,7 +61,10 @@
                 @for (session of plan.sessions; track $index) {
                   <li>
                     <span class="pixel-label day">{{ session.day | titlecase }}</span>
-                    {{ session.focus }} · {{ session.minutes }} min
+                    {{ session.activity }}
+                    @if (session.minutes) {
+                      · {{ session.minutes }} min
+                    }
                   </li>
                 }
               </ul>

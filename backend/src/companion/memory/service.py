@@ -11,7 +11,7 @@ from sqlalchemy import ColumnElement, delete, or_, select
 from companion.actions.service import utc_now
 from companion.db.models import Memory, MemoryKind
 from companion.db.session import SessionFactory
-from companion.embeddings import Embedder
+from companion.embeddings import Embedder, warm_up
 from companion.memory.extract import Candidate, worth_extracting
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,9 @@ class MemoryService:
         self._sessions = sessions
         self._embedder = embedder
         self._clock = clock
+
+    async def wake(self) -> None:
+        await warm_up(self._embedder)
 
     def _expiry(self, kind: MemoryKind) -> datetime | None:
         return (
@@ -172,6 +175,11 @@ class UserMemory:
 
     async def recall(self, text: str) -> list[MemoryView]:
         return await self.service.recall(self.user_id, text)
+
+    def wake(self) -> None:
+        task = asyncio.create_task(self.service.wake())
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     def observe(self, text: str) -> None:
         if self.extractor is None or not worth_extracting(text):

@@ -96,3 +96,27 @@ async def test_the_loop_stops_promptly(dispatcher: ReminderDispatcher) -> None:
     stop.set()
 
     await asyncio.wait_for(task, timeout=2)
+
+
+async def test_a_repeating_reminder_moves_on_to_its_next_day(
+    dispatcher: ReminderDispatcher, hub: ConnectionHub, sessions: SessionFactory, user: User
+) -> None:
+    hub.connect(user.id, Inbox())
+    async with sessions() as session, session.begin():
+        session.add(
+            Reminder(
+                user_id=user.id,
+                title="drink water",
+                remind_at=NOW - timedelta(minutes=1),
+                repeat_days=["wednesday", "friday"],
+            )
+        )
+
+    assert await dispatcher.dispatch_due() == 1
+
+    async with sessions() as session:
+        reminder = await session.scalar(select(Reminder))
+    assert reminder is not None
+    assert reminder.delivered_at is None
+    assert reminder.remind_at == datetime(2037, 11, 20, 12, 59, tzinfo=UTC)
+    assert await dispatcher.dispatch_due() == 0

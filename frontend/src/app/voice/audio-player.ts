@@ -1,6 +1,13 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { AUDIO_CONTEXT, loudness } from './audio-context';
 
+const CHIME_NOTES = [880, 1318.5];
+const NOTE_GAP = 0.18;
+const NOTE_LENGTH = 0.5;
+const CHIME_LENGTH = 0.9;
+const CHIME_VOLUME = 0.25;
+const SILENT = 0.0001;
+
 @Injectable({ providedIn: 'root' })
 export class AudioPlayer {
   private readonly createContext = inject(AUDIO_CONTEXT);
@@ -15,6 +22,11 @@ export class AudioPlayer {
 
   play(audio: ArrayBuffer): Promise<void> {
     this.queue = this.queue.then(() => this.schedule(audio)).catch(() => undefined);
+    return this.queue;
+  }
+
+  chime(): Promise<void> {
+    this.queue = this.queue.then(() => this.scheduleChime()).catch(() => undefined);
     return this.queue;
   }
 
@@ -51,6 +63,24 @@ export class AudioPlayer {
         this.playing.set(false);
       }
     };
+  }
+
+  private scheduleChime(): void {
+    const { context } = this.ensureContext();
+    const startAt = Math.max(context.currentTime, this.queueEnd);
+    CHIME_NOTES.forEach((frequency, index) => {
+      const at = startAt + index * NOTE_GAP;
+      const tone = context.createOscillator();
+      const volume = context.createGain();
+      tone.frequency.value = frequency;
+      volume.gain.setValueAtTime(SILENT, at);
+      volume.gain.exponentialRampToValueAtTime(CHIME_VOLUME, at + 0.02);
+      volume.gain.exponentialRampToValueAtTime(SILENT, at + NOTE_LENGTH);
+      tone.connect(volume).connect(context.destination);
+      tone.start(at);
+      tone.stop(at + NOTE_LENGTH);
+    });
+    this.queueEnd = startAt + CHIME_LENGTH;
   }
 
   private ensureContext(): { context: AudioContext; analyser: AnalyserNode } {

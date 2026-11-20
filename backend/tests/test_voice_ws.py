@@ -1,5 +1,6 @@
 import json
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -8,11 +9,13 @@ from starlette.testclient import WebSocketTestSession
 
 from companion.api.dev_ws import NOT_HEARD, TOO_LONG
 from companion.config import Settings
+from companion.db.models import Reminder
 from companion.db.session import SessionFactory
 from companion.llm.fake import FakeLLM
 from companion.main import create_app
 from companion.speech.stt import FakeSpeechToText, SpeechError
 from companion.speech.tts import FakeTextToSpeech
+from companion.users import get_or_create_user
 
 WEBM = b"\x1a\x45\xdf\xa3" + b"\x00" * 64
 REPLY = "Three times? Look at you. Let's make it four."
@@ -133,3 +136,34 @@ def test_silence_or_a_failed_transcription_asks_to_try_again(
             {"type": "error", "detail": NOT_HEARD},
             {"type": "status", "state": "idle"},
         ]
+
+
+async def test_a_due_reminder_is_announced_spoken_and_remembered(
+    settings: Settings, sessions: SessionFactory
+) -> None:
+    user = await get_or_create_user(sessions, settings.dev_user_email, None)
+    async with sessions() as session, session.begin():
+        session.add(
+            Reminder(
+                user_id=user.id, title="stretch", remind_at=datetime.now(UTC) - timedelta(minutes=1)
+            )
+        )
+    llm = two_sentence_llm()
+    voice = FakeTextToSpeech()
+    app = create_app(settings, llm=llm, listener=FakeSpeechToText("ok, done"), voice=voice)
+
+    with TestClient(app) as client, client.websocket_connect("/dev/ws?speak=true") as ws:
+        announced = turn(ws)
+        ws.send_bytes(WEBM)
+        turn(ws)
+
+    first = announced[0]
+    assert isinstance(first, dict)
+    assert first["type"] == "reminder_due"
+    assert announced[1] == {"type": "status", "state": "speaking"}
+    assert isinstance(announced[2], bytes)
+    assert voice.spoken[0] == "Hey, reminder: stretch."
+    reply_prompt = next(call for call in llm.calls if not call.json_mode).messages
+    assert ("assistant", "Hey, reminder: stretch.") in [
+        (m.role.value, m.content) for m in reply_prompt
+    ]

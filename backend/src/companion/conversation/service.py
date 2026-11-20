@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -12,6 +14,7 @@ from companion.conversation.safety import (
     classify,
     comments_on_looks,
     mentions_body,
+    rule_mode,
     update_teasing,
 )
 from companion.conversation.speech import to_speech
@@ -44,8 +47,12 @@ MEMORY_GUIDE = (
     "Use it when it is relevant, and never make up more:"
 )
 TOOLS_GUIDE = (
-    "You can create tasks, reminders and workout plans for the user with your tools. "
-    "When they ask for one, call the tool once and pass any time exactly as they said it. "
+    "You can create tasks, reminders and weekly plans for the user with your tools. "
+    "When they ask for tasks or reminders, call add_tasks_and_reminders once and put every "
+    "task and reminder from their message in it, even when there are several. "
+    "Tasks and reminders can repeat on chosen days, like 'every weekday at 9'; use repeat "
+    "for routines instead of making one task per day. For a different activity on each day, "
+    "make a weekly plan. Pass any time exactly as they said it. "
     "The app reads it back and asks them to confirm, so never say it is already saved. "
     "Never say you will add, set or save something unless you call the tool in that reply; "
     "if you are not sure they want it, ask them instead."
@@ -134,37 +141,54 @@ class Conversation:
             raise ValueError(f"Message is longer than {MAX_USER_TEXT} characters")
 
         superseded = None
-        if self._actions is not None and (pending := await self._actions.pending()) is not None:
+        if self._actions is not None:
             answer = classify_answer(text)
-            resolution = await self._actions.resolve(pending, confirm=answer is Answer.YES)
-            if answer is not Answer.OTHER:
-                return self._finish(
-                    text,
-                    Turn(
-                        resolution.message, Mode.NORMAL, self.teasing_allowed, resolution=resolution
-                    ),
-                )
-            superseded = resolution
+            if (pending := await self._actions.pending()) is not None:
+                resolution = await self._actions.resolve(pending, confirm=answer is Answer.YES)
+                if answer is not Answer.OTHER:
+                    return self._answered(text, resolution)
+                superseded = resolution
+            elif answer is Answer.UNDO and (saved := await self._actions.last_saved()) is not None:
+                return self._answered(text, await self._actions.undo(saved))
 
+        started = time.perf_counter()
         teasing_allowed = update_teasing(self.teasing_allowed, text)
-        mode = await classify(self._llm, self._history, text)
-        tools = TOOLS if self._actions is not None and mode is not Mode.CRISIS else ()
+        classifying = asyncio.create_task(classify(self._llm, self._history, text))
         remembered = memory_block(await self._recall(text))
+        recalled = time.perf_counter()
+        drafting = None
+        if rule_mode(text) is Mode.NORMAL:
+            drafting = asyncio.create_task(
+                self._ask(self._system(Mode.NORMAL, teasing_allowed, remembered), text, self._tools)
+            )
+        mode = await classifying
+        classified = time.perf_counter()
+        tools = self._tools if mode is not Mode.CRISIS else ()
         learn = mode is not Mode.CRISIS
-        system = _join(
-            self._personality.system_prompt(mode, teasing_allowed=teasing_allowed),
-            remembered,
-            TOOLS_GUIDE if tools else "",
-        )
 
         try:
-            reply = await self._ask(system, text, tools)
+            if mode is Mode.NORMAL and drafting is not None:
+                reply = await drafting
+            else:
+                if drafting is not None:
+                    drafting.cancel()
+                    await asyncio.gather(drafting, return_exceptions=True)
+                reply = await self._ask(
+                    self._system(mode, teasing_allowed, remembered), text, tools
+                )
         except ToolCallError:
             return self._finish(
                 text, Turn(UNCLEAR_DETAILS, mode, teasing_allowed, resolution=superseded), learn
             )
+        logger.info(
+            "Turn timing: recall %.2fs, mode %s after %.2fs, reply after %.2fs",
+            recalled - started,
+            mode.value,
+            classified - started,
+            time.perf_counter() - started,
+        )
         if reply.tool_calls and tools and self._actions is not None:
-            outcome = await self._actions.propose(reply.tool_calls[0])
+            outcome = await self._actions.propose(reply.tool_calls)
             if isinstance(outcome, Proposal):
                 turn = Turn(outcome.question, mode, teasing_allowed, outcome, superseded)
             else:
@@ -185,6 +209,28 @@ class Conversation:
         if mode is Mode.CRISIS:
             spoken = f"{spoken} {CRISIS_SUPPORT_LINE}"
         return self._finish(text, Turn(spoken, mode, teasing_allowed, resolution=superseded), learn)
+
+    @property
+    def _tools(self) -> Sequence[ToolSpec]:
+        return TOOLS if self._actions is not None else ()
+
+    def _system(self, mode: Mode, teasing_allowed: bool, remembered: str) -> str:
+        tools_guide = TOOLS_GUIDE if self._actions is not None and mode is not Mode.CRISIS else ""
+        return _join(
+            self._personality.system_prompt(mode, teasing_allowed=teasing_allowed),
+            remembered,
+            tools_guide,
+        )
+
+    def note(self, said: str) -> None:
+        self._history.append(ChatMessage(Role.ASSISTANT, said))
+        del self._history[:-MAX_HISTORY_MESSAGES]
+
+    def _answered(self, text: str, resolution: Resolution) -> Turn:
+        return self._finish(
+            text,
+            Turn(resolution.message, Mode.NORMAL, self.teasing_allowed, resolution=resolution),
+        )
 
     async def _recall(self, text: str) -> list[MemoryView]:
         if self._memory is None:

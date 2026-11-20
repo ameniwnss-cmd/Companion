@@ -12,7 +12,7 @@ six" into a real reminder once you confirm it.
 
 - **Voice only.** Push-to-talk, an animated orb that reacts to audio, and live captions for both
   sides. There is no chat box.
-- **Actions with consent.** The model proposes tasks, reminders and workout plans. Nothing is
+- **Actions with consent.** The model proposes tasks, reminders and weekly plans. Nothing is
   saved until you say yes ([ADR 0004](docs/adr/0004-pending-actions.md)).
 - **Safety enforced in code, not just prompts.** A mode router turns the banter off when you are
   struggling, and "stop teasing" is a hard switch ([ADR 0003](docs/adr/0003-safety-mode-router.md)).
@@ -91,8 +91,10 @@ setting has a safe default, so the app and the test suite run without any secret
 Open <http://localhost:4200>, then hold the **Hold to talk** button (or the space bar) and speak.
 The orb listens, thinks and talks back, with live captions for both sides.
 
-- **My room** keeps today's tasks and reminders beside the companion; tick tasks off right there.
-- **Quest log** shows every task, reminder and workout plan you confirmed.
+- **My room** keeps today's tasks, plan and reminders beside the companion; tick tasks off right
+  there. Reminders chime, are spoken aloud and can pop up as system notifications.
+- **Quest log** shows every task, reminder and weekly plan you confirmed, including routines
+  that repeat on chosen days.
 - **Diary** shows what the companion remembers about you, and lets you edit or delete it.
 - **Dev** (development builds only) is a text chat that also shows the safety mode chosen for
   each reply.
@@ -111,7 +113,7 @@ curl -L -o backend/.models/kokoro/voices-v1.0.bin \
   https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
 ```
 
-Ask for a reminder, a task or a workout plan to see the confirmation card: nothing is saved
+Ask for a reminder, a task or a weekly plan to see the confirmation card: nothing is saved
 until you say yes or press Save.
 
 The app runs as a single local user for now: the pages talk to the backend's development
@@ -164,7 +166,7 @@ deterministic, offline and free.
 
 - [x] **0. Foundations:** monorepo, CI, linting, Docker Compose, decision records
 - [x] **1. Conversation core:** provider interfaces and fakes, dev text channel, personality, mode router
-- [x] **2. Actions:** tasks, reminders and workout plans with the confirmation flow
+- [x] **2. Actions:** tasks, reminders and weekly plans with the confirmation flow
 - [x] **3. Memory:** typed extraction, pgvector retrieval, view, edit and delete API
 - [x] **4. Voice:** Groq Whisper speech-to-text, Kokoro voice, audio over the WebSocket
 - [x] **5. Interface:** pixel room, orb, push-to-talk, captions, quest log and diary
@@ -181,6 +183,7 @@ deterministic, offline and free.
 
 - [Architecture decisions](docs/adr/README.md)
 - [Reminder delivery](docs/adr/0006-reminder-delivery.md)
+- [Routines and weekly plans](docs/adr/0008-routines-and-weekly-plans.md)
 - [Typed long-term memory](docs/adr/0007-typed-memory.md)
 - [Spike: a small local model as the brain](docs/spikes/local-llm-spike.md)
 - [Companion personality](backend/config/personality.md)

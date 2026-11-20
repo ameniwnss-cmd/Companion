@@ -39,6 +39,33 @@ class FakeAudioContext {
     };
   }
 
+  readonly tones: { frequency: number; startedAt: number | null }[] = [];
+
+  createOscillator() {
+    const tone = { frequency: { value: 0 }, startedAt: null as number | null };
+    this.tones.push({
+      get frequency() {
+        return tone.frequency.value;
+      },
+      get startedAt() {
+        return tone.startedAt;
+      },
+    });
+    return {
+      frequency: tone.frequency,
+      connect: (node: unknown) => node,
+      start: (when: number) => (tone.startedAt = when),
+      stop: () => undefined,
+    };
+  }
+
+  createGain() {
+    return {
+      gain: { setValueAtTime: () => undefined, exponentialRampToValueAtTime: () => undefined },
+      connect: () => undefined,
+    };
+  }
+
   createBufferSource(): FakeSource {
     const source = new FakeSource();
     this.sources.push(source);
@@ -109,5 +136,22 @@ describe('AudioPlayer', () => {
     await player.play(new ArrayBuffer(2));
 
     expect(context.sources).toEqual([]);
+  });
+
+  it('chimes after the speech already queued, then plays what comes next', async () => {
+    void player.play(new ArrayBuffer(2));
+    await player.chime();
+    await player.play(new ArrayBuffer(1));
+
+    expect(context.tones.map((tone) => tone.startedAt)).toEqual([12, 12.18]);
+    expect(context.sources[1].startedAt).toBeCloseTo(12.9);
+  });
+
+  it('chimes even when the companion is muted', async () => {
+    player.muted.set(true);
+
+    await player.chime();
+
+    expect(context.tones).toHaveLength(2);
   });
 });

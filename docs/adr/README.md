@@ -12,3 +12,4 @@ it costs. New decisions get the next number; superseded ones are marked, never d
 | 0005 | [Audio over WebSockets, not WebRTC](0005-websocket-audio.md)              | Accepted |
 | 0006 | [Reminders are delivered by an in-process polling loop](0006-reminder-delivery.md) | Accepted |
 | 0007 | [Typed long-term memory, learned in the background](0007-typed-memory.md) | Accepted |
+| 0008 | [Routines repeat; weekly plans hold a different activity each day](0008-routines-and-weekly-plans.md) | Accepted |

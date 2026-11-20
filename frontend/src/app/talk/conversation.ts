@@ -9,10 +9,11 @@ import {
 } from '@angular/core';
 import { Orb, OrbState } from '../orb/orb';
 import { CompanionSession } from '../session/companion-session';
-import { ActionKind } from '../session/protocol';
+import { HandsFree } from '../session/hands-free';
+import { ActionKind, PendingItem } from '../session/protocol';
 import { PushToTalk } from '../session/push-to-talk';
 import { Button } from '../ui/button';
-import { Icon } from '../ui/icon';
+import { Icon, IconName } from '../ui/icon';
 import { Panel } from '../ui/panel';
 import { AudioPlayer } from '../voice/audio-player';
 import { Recorder } from '../voice/recorder';
@@ -24,11 +25,21 @@ const HINTS: Record<OrbState, string> = {
   speaking: 'Talking. Hold to interrupt.',
   offline: "Can't reach your companion. Is the backend running?",
 };
+const HANDS_FREE_HINTS: Partial<Record<OrbState, string>> = {
+  idle: "Hands-free is on. Just talk, and pause when you're done.",
+  speaking: "Talking. I'll listen again when I'm done.",
+};
 
 const KIND_LABELS: Record<ActionKind, string> = {
   task: 'New quest',
   reminder: 'New reminder',
-  workout_plan: 'New training plan',
+  weekly_plan: 'New weekly plan',
+};
+
+const KIND_ICONS: Record<ActionKind, IconName> = {
+  task: 'quests',
+  reminder: 'bell',
+  weekly_plan: 'calendar',
 };
 
 function isTyping(target: EventTarget | null): boolean {
@@ -40,7 +51,7 @@ function isTyping(target: EventTarget | null): boolean {
   imports: [Orb, Button, Icon, Panel],
   templateUrl: './conversation.html',
   styleUrl: './conversation.scss',
-  providers: [CompanionSession, PushToTalk],
+  providers: [PushToTalk, HandsFree],
   host: {
     '(window:keydown)': 'onKeyDown($event)',
     '(window:keyup)': 'onKeyUp($event)',
@@ -50,20 +61,21 @@ function isTyping(target: EventTarget | null): boolean {
 export class Conversation {
   protected readonly session = inject(CompanionSession);
   protected readonly talk = inject(PushToTalk);
+  protected readonly handsFree = inject(HandsFree);
   protected readonly player = inject(AudioPlayer);
   private readonly recorder = inject(Recorder);
-  private readonly dismissedReminder = signal<number | null>(null);
+  private readonly dismissedSaved = signal<number | null>(null);
 
   readonly plansChanged = output();
 
-  protected readonly kindLabels = KIND_LABELS;
+  protected readonly kindIcons = KIND_ICONS;
 
   protected readonly orbState = computed<OrbState>(() => {
     const state = this.session.state();
     if (state === 'closed') {
       return 'offline';
     }
-    if (this.talk.recording()) {
+    if (this.talk.recording() || this.handsFree.hearing()) {
       return 'listening';
     }
     if (this.player.playing() || state === 'speaking') {
@@ -72,11 +84,14 @@ export class Conversation {
     return state === 'thinking' ? 'thinking' : 'idle';
   });
 
-  protected readonly hint = computed(() => HINTS[this.orbState()]);
+  protected readonly hint = computed(() => {
+    const state = this.orbState();
+    return (this.handsFree.on() && HANDS_FREE_HINTS[state]) || HINTS[state];
+  });
 
-  protected readonly reminder = computed(() => {
-    const reminder = this.session.lastReminder();
-    return reminder && reminder.id !== this.dismissedReminder() ? reminder : null;
+  protected readonly saved = computed(() => {
+    const saved = this.session.lastSaved();
+    return saved && saved.id !== this.dismissedSaved() ? saved : null;
   });
 
   protected readonly problem = computed(() => {
@@ -85,32 +100,34 @@ export class Conversation {
     return last?.from === 'system' ? last.text : null;
   });
 
-  private readonly planEvents = computed(
-    () =>
-      this.session
-        .entries()
-        .filter(
-          (entry) =>
-            (entry.from === 'action' && entry.status === 'confirmed') || entry.from === 'reminder',
-        ).length,
-  );
-
   constructor() {
     let seen = 0;
     effect(() => {
-      const count = this.planEvents();
-      if (count > seen) {
-        seen = count;
+      const version = this.session.plansVersion();
+      if (version > seen) {
+        seen = version;
         this.plansChanged.emit();
       }
     });
   }
 
-  protected readonly level = (): number =>
-    this.talk.recording() ? this.recorder.level() : this.player.level();
+  protected readonly level = (): number => {
+    if (this.handsFree.hearing()) {
+      return this.handsFree.level();
+    }
+    return this.talk.recording() ? this.recorder.level() : this.player.level();
+  };
 
-  protected dismissReminder(id: number): void {
-    this.dismissedReminder.set(id);
+  protected cardTitle(items: readonly PendingItem[]): string {
+    return items.length === 1 ? KIND_LABELS[items[0].kind] : `${items.length} new things`;
+  }
+
+  protected savedLabel(items: readonly PendingItem[]): string {
+    return items.length === 1 ? 'Saved' : `Saved all ${items.length}`;
+  }
+
+  protected dismissSaved(id: number): void {
+    this.dismissedSaved.set(id);
   }
 
   protected toggleMute(): void {
@@ -121,7 +138,7 @@ export class Conversation {
   }
 
   protected onKeyDown(event: KeyboardEvent): void {
-    if (event.code !== 'Space' || event.repeat || isTyping(event.target)) {
+    if (!this.pushToTalkKey(event) || event.repeat) {
       return;
     }
     event.preventDefault();
@@ -129,10 +146,14 @@ export class Conversation {
   }
 
   protected onKeyUp(event: KeyboardEvent): void {
-    if (event.code !== 'Space' || isTyping(event.target)) {
+    if (!this.pushToTalkKey(event)) {
       return;
     }
     event.preventDefault();
     void this.talk.stop();
+  }
+
+  private pushToTalkKey(event: KeyboardEvent): boolean {
+    return event.code === 'Space' && !isTyping(event.target) && !this.handsFree.on();
   }
 }

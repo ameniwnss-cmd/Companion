@@ -61,11 +61,52 @@ def test_describe_each_kind() -> None:
     plan = {
         "name": "Get strong",
         "sessions": [
-            {"day": "monday", "focus": "upper body", "minutes": 45},
-            {"day": "thursday", "focus": "legs", "minutes": 40},
+            {"day": "monday", "activity": "upper body", "minutes": 45},
+            {"day": "thursday", "activity": "legs", "minutes": 40},
         ],
     }
-    assert describe(ActionKind.WORKOUT_PLAN, plan, NOW) == (
-        "a workout plan called Get strong: Monday upper body for 45 minutes "
+    assert describe(ActionKind.WEEKLY_PLAN, plan, NOW) == (
+        "a weekly plan called Get strong: Monday upper body for 45 minutes "
         "and Thursday legs for 40 minutes"
+    )
+
+
+def test_a_weekly_plan_day_without_minutes_is_just_the_activity() -> None:
+    plan = {
+        "name": "Job hunt",
+        "sessions": [
+            {"day": "monday", "activity": "polish the portfolio", "minutes": None},
+            {"day": "tuesday", "activity": "two applications", "minutes": None},
+        ],
+    }
+
+    assert describe(ActionKind.WEEKLY_PLAN, plan, NOW) == (
+        "a weekly plan called Job hunt: Monday polish the portfolio and Tuesday two applications"
+    )
+
+
+def test_repeating_items_say_when_they_repeat() -> None:
+    task = {
+        "title": "apply for jobs",
+        "due_at": None,
+        "repeat_days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+        "time_of_day": "09:00",
+    }
+    reminder = {
+        "title": "drink water",
+        "remind_at": NOW.replace(hour=21, minute=0).isoformat(),
+        "repeat_days": [
+            "monday",
+            "sunday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+        ],
+    }
+
+    assert describe(ActionKind.TASK, task, NOW) == "a task: apply for jobs, every weekday at 9 AM"
+    assert describe(ActionKind.REMINDER, reminder, NOW) == (
+        "a reminder to drink water, every day at 9 PM"
     )
