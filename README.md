@@ -1,19 +1,24 @@
 # Companion
 
+[![CI](https://github.com/ameniwnss-cmd/Companion/actions/workflows/ci.yml/badge.svg)](https://github.com/ameniwnss-cmd/Companion/actions/workflows/ci.yml)
+
 **A voice-only AI companion that turns conversations into actions.**
 
 You hold a button and talk. Your companion, a funny, teasing best friend who nags you to follow
 through, talks back, remembers what matters to you, and turns "remind me to call mom tomorrow at
 six" into a real reminder once you confirm it.
 
-> Status: in active development. See the [roadmap](#roadmap).
+**[Watch the demo](https://drive.google.com/file/d/1vVqiOsxZKLSJOrCRkGCAAewaujmxlAHf/view?usp=sharing)**
+
+![The companion's pixel-art room with the orb, today's quests and reminders](docs/screenshot.webp)
 
 ## Highlights
 
 - **Voice only.** Push-to-talk, an animated orb that reacts to audio, and live captions for both
   sides. There is no chat box.
-- **Actions with consent.** The model proposes tasks, reminders and weekly plans. Nothing is
-  saved until you say yes ([ADR 0004](docs/adr/0004-pending-actions.md)).
+- **Actions with consent.** The model proposes tasks, reminders and weekly plans, and ticks off
+  the quests you say you finished. Nothing is saved until you say yes, and "undo" takes it back
+  ([ADR 0004](docs/adr/0004-pending-actions.md)).
 - **Safety enforced in code, not just prompts.** A mode router turns the banter off when you are
   struggling, and "stop teasing" is a hard switch ([ADR 0003](docs/adr/0003-safety-mode-router.md)).
 - **Typed long-term memory.** Preferences, goals, commitments, habits and recent context, which
@@ -205,7 +210,7 @@ personality or the model.
 - [x] **4. Voice:** Groq Whisper speech-to-text, Kokoro voice, audio over the WebSocket
 - [x] **5. Interface:** pixel room, orb, push-to-talk, captions, quest log and diary
 - [x] **6. Evals and end-to-end tests:** personality and safety eval suite, Playwright
-- [ ] **7. Polish:** demo video, final documentation
+- [x] **7. Polish:** ticking off quests by voice, demo video, final documentation
 
 ### Next steps
 
