@@ -37,7 +37,7 @@ jobs:
       TEST_DATABASE_URL: postgresql+asyncpg://companion:companion@localhost:5432/companion_test
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "0.13.9"
           enable-cache: true
@@ -76,6 +76,57 @@ jobs:
         run: npm run test:ci
       - name: Build
         run: npm run build
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: companion
+          POSTGRES_PASSWORD: companion
+          POSTGRES_DB: companion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U companion"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      E2E_DATABASE_URL: postgresql+asyncpg://companion:companion@localhost:5432/companion_e2e
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.13.9"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend dependencies (from lockfile)
+        working-directory: backend
+        run: uv sync --locked
+      - name: Install frontend dependencies (from lockfile)
+        working-directory: frontend
+        run: npm ci
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Run end-to-end test
+        working-directory: frontend
+        run: npm run e2e
+      - name: Keep the trace of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-trace
+          path: frontend/test-results
+          retention-days: 7
 
   docker:
     name: Docker image builds

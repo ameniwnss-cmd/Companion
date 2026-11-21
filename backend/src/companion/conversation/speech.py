@@ -12,14 +12,15 @@ _LIST_MARKER = re.compile(r"^\s*(?:[-*+\N{BULLET}]|\d+[.)])\s+", re.MULTILINE)
 _MARKDOWN = re.compile(r"[*_#`>~|]")
 _DASH = re.compile(r"\s*[\N{EN DASH}\N{EM DASH}]\s*")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_SPACE_BEFORE_PUNCTUATION = re.compile(r"\s+(?=[.,!?])")
 
 
 def to_speech(text: str, *, max_sentences: int = MAX_SENTENCES) -> str:
     cleaned = _LIST_MARKER.sub("", text)
     cleaned = _MARKDOWN.sub("", cleaned)
-    cleaned = _EMOJI_AND_SYMBOLS.sub("", cleaned)
+    cleaned = _EMOJI_AND_SYMBOLS.sub(" ", cleaned)
     cleaned = _DASH.sub(", ", cleaned)
-    cleaned = " ".join(cleaned.split())
+    cleaned = _SPACE_BEFORE_PUNCTUATION.sub("", " ".join(cleaned.split()))
     if not cleaned:
         return FALLBACK_REPLY
 

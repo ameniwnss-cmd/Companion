@@ -27,3 +27,14 @@ def test_keeps_at_most_three_sentences() -> None:
 
 def test_empty_output_gets_a_fallback_reply() -> None:
     assert to_speech("** 🔥 **") == FALLBACK_REPLY
+
+
+@pytest.mark.parametrize(
+    ("raw", "spoken"),
+    [
+        ("Spill the beans, bro!😂Seriously, tell me.", "Spill the beans, bro! Seriously, tell me."),
+        ("Nice work 💪!", "Nice work!"),
+    ],
+)
+def test_an_emoji_between_words_leaves_a_space_not_a_gap(raw: str, spoken: str) -> None:
+    assert to_speech(raw) == spoken

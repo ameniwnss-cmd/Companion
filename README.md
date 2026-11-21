@@ -22,7 +22,8 @@ six" into a real reminder once you confirm it.
   interfaces: a hosted free tier or a fully offline local model, chosen by one setting
   ([ADR 0002](docs/adr/0002-ai-providers.md)).
 - **Measured, not guessed.** Model choices are backed by a written spike
-  ([local LLM spike](docs/spikes/local-llm-spike.md)) and, soon, an automated eval suite.
+  ([local LLM spike](docs/spikes/local-llm-spike.md)) and an evaluation suite that grades the real
+  model on personality, safety, tool use and honesty ([latest results](docs/evals/latest.md)).
 
 ## Architecture
 
@@ -60,7 +61,7 @@ flowchart LR
 | Backend  | Python 3.13, FastAPI, Pydantic v2, WebSockets, SQLAlchemy 2, Alembic, uv   |
 | Data     | PostgreSQL 17 + pgvector                                                   |
 | AI       | Pluggable providers: Groq (default), Ollama (offline)                      |
-| Quality  | pytest, mypy `--strict`, ruff, ESLint, Prettier, GitHub Actions            |
+| Quality  | pytest, Vitest, Playwright, mypy `--strict`, ruff, ESLint, Prettier, GitHub Actions |
 | Run      | Docker Compose                                                             |
 
 ## Getting started
@@ -136,6 +137,35 @@ The same checks run in [CI](.github/workflows/ci.yml) on every push and as
 [pre-commit hooks](.pre-commit-config.yaml) locally. Tests use fake AI providers, so they are
 deterministic, offline and free.
 
+### End-to-end test
+
+```bash
+cd frontend
+npx playwright install chromium   # once
+npm run e2e
+```
+
+Playwright starts its own backend (scripted fake AI, its own `companion_e2e` database) and
+frontend on ports 8100 and 4300, then holds the talk button with a fake microphone: the spoken
+request becomes a confirmation card, is saved, and shows up in the quest log. It also runs in CI.
+
+### Evaluation suite
+
+```bash
+cd backend
+uv run python -m evals                     # every case, once
+uv run python -m evals --runs 3            # each case three times
+uv run python -m evals --category safety   # one category
+```
+
+Unit tests prove the code works; the evaluation suite checks how the **real model** behaves. It
+holds realistic conversations (a skipped workout, grief, a crisis, a body roast, several tasks at
+once, a weekday routine, a weekly schedule) and grades each reply. Code checks everything it can,
+such as the safety mode, the tool calls, the repeat days and banned body comments; a judge prompt
+is used only for tone. It needs a real model in `backend/.env`, makes a few dozen calls, and
+writes [docs/evals/latest.md](docs/evals/latest.md). Run it after changing the prompt, the
+personality or the model.
+
 ## Project structure
 
 ```text
@@ -144,6 +174,8 @@ deterministic, offline and free.
 │   ├── config/           personality.md (the companion's voice and rules)
 │   ├── db/init/          one-time database setup (pgvector extension)
 │   ├── src/companion/    application code
+│   ├── evals/            evaluation suite: graded conversations against the real model
+│   ├── e2e/              backend with scripted fakes for the end-to-end test
 │   └── tests/
 ├── frontend/src/app/
 │   ├── talk/             the room: voice conversation with today's tasks and reminders
@@ -155,8 +187,10 @@ deterministic, offline and free.
 │   ├── voice/            microphone recorder and gapless audio player (Web Audio API)
 │   ├── plans/ memories/  quest log and diary pages, and the task and reminder rows
 │   └── dev/              developer text chat, compiled out of production builds
+├── frontend/e2e/         Playwright end-to-end test
 ├── docs/
 │   ├── adr/              architecture decision records
+│   ├── evals/            latest evaluation results
 │   └── spikes/           time-boxed experiments and their findings
 ├── .github/workflows/    CI
 └── docker-compose.yml
@@ -170,7 +204,7 @@ deterministic, offline and free.
 - [x] **3. Memory:** typed extraction, pgvector retrieval, view, edit and delete API
 - [x] **4. Voice:** Groq Whisper speech-to-text, Kokoro voice, audio over the WebSocket
 - [x] **5. Interface:** pixel room, orb, push-to-talk, captions, quest log and diary
-- [ ] **6. Evals and end-to-end tests:** personality and safety eval suite, Playwright
+- [x] **6. Evals and end-to-end tests:** personality and safety eval suite, Playwright
 - [ ] **7. Polish:** demo video, final documentation
 
 ### Next steps
@@ -186,6 +220,7 @@ deterministic, offline and free.
 - [Routines and weekly plans](docs/adr/0008-routines-and-weekly-plans.md)
 - [Typed long-term memory](docs/adr/0007-typed-memory.md)
 - [Spike: a small local model as the brain](docs/spikes/local-llm-spike.md)
+- [Evaluation results](docs/evals/latest.md)
 - [Companion personality](backend/config/personality.md)
 
 ## Disclaimer
