@@ -49,14 +49,20 @@ MEMORY_GUIDE = (
 TOOLS_GUIDE = (
     "You can create tasks, reminders and weekly plans for the user with your tools. "
     "When they ask for tasks or reminders, call add_tasks_and_reminders once and put every "
-    "task and reminder from their message in it, even when there are several. "
+    "task and reminder from their latest message in it, even when there are several. "
+    "Never repeat items from earlier messages: those were already handled. "
     "Tasks and reminders can repeat on chosen days, like 'every weekday at 9'; use repeat "
     "for routines instead of making one task per day. For a different activity on each day, "
     "make a weekly plan. Pass any time exactly as they said it. "
-    "The app reads it back and asks them to confirm, so never say it is already saved. "
+    "When they say they finished one of their open tasks, call complete_tasks with its exact "
+    "title from the list; if they only mention doing something that is not on the list, just "
+    "react to it. "
+    "The app reads it back and asks them to confirm, so never say it is already saved or "
+    "ticked off. "
     "Never say you will add, set or save something unless you call the tool in that reply; "
     "if you are not sure they want it, ask them instead."
 )
+OPEN_TASKS_GUIDE = "The user's open tasks, by exact title:"
 
 
 _QUOTES = str.maketrans(
@@ -76,6 +82,12 @@ def memory_block(memories: Sequence[MemoryView]) -> str:
         return ""
     lines = [f"- {m.kind.value.replace('_', ' ')}: {m.content}" for m in memories]
     return "\n".join([MEMORY_GUIDE, *lines])
+
+
+def tasks_block(titles: Sequence[str]) -> str:
+    if not titles:
+        return ""
+    return "\n".join([OPEN_TASKS_GUIDE, *(f"- {title}" for title in titles)])
 
 
 def _join(*parts: str) -> str:
@@ -154,12 +166,18 @@ class Conversation:
         started = time.perf_counter()
         teasing_allowed = update_teasing(self.teasing_allowed, text)
         classifying = asyncio.create_task(classify(self._llm, self._history, text))
-        remembered = memory_block(await self._recall(text))
+        memories, open_tasks = await asyncio.gather(self._recall(text), self._open_tasks())
+        remembered = memory_block(memories)
+        listed = tasks_block(open_tasks)
         recalled = time.perf_counter()
         drafting = None
         if rule_mode(text) is Mode.NORMAL:
             drafting = asyncio.create_task(
-                self._ask(self._system(Mode.NORMAL, teasing_allowed, remembered), text, self._tools)
+                self._ask(
+                    self._system(Mode.NORMAL, teasing_allowed, remembered, listed),
+                    text,
+                    self._tools,
+                )
             )
         mode = await classifying
         classified = time.perf_counter()
@@ -174,7 +192,7 @@ class Conversation:
                     drafting.cancel()
                     await asyncio.gather(drafting, return_exceptions=True)
                 reply = await self._ask(
-                    self._system(mode, teasing_allowed, remembered), text, tools
+                    self._system(mode, teasing_allowed, remembered, listed), text, tools
                 )
         except ToolCallError:
             return self._finish(
@@ -214,13 +232,19 @@ class Conversation:
     def _tools(self) -> Sequence[ToolSpec]:
         return TOOLS if self._actions is not None else ()
 
-    def _system(self, mode: Mode, teasing_allowed: bool, remembered: str) -> str:
-        tools_guide = TOOLS_GUIDE if self._actions is not None and mode is not Mode.CRISIS else ""
+    def _system(self, mode: Mode, teasing_allowed: bool, remembered: str, listed: str) -> str:
+        with_tools = self._actions is not None and mode is not Mode.CRISIS
         return _join(
             self._personality.system_prompt(mode, teasing_allowed=teasing_allowed),
             remembered,
-            tools_guide,
+            TOOLS_GUIDE if with_tools else "",
+            listed if with_tools else "",
         )
+
+    async def _open_tasks(self) -> list[str]:
+        if self._actions is None:
+            return []
+        return await self._actions.open_tasks()
 
     def note(self, said: str) -> None:
         self._history.append(ChatMessage(Role.ASSISTANT, said))

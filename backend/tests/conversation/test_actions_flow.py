@@ -14,7 +14,7 @@ from companion.actions.service import (
 from companion.actions.tools import TOOLS
 from companion.conversation.personality import Personality
 from companion.conversation.safety import Mode
-from companion.conversation.service import TOOLS_GUIDE, Conversation
+from companion.conversation.service import OPEN_TASKS_GUIDE, TOOLS_GUIDE, Conversation
 from companion.db.models import ActionKind, ActionStatus
 from companion.llm import ChatMessage, LLMReply, ToolCall, ToolCallError
 from companion.llm.fake import FakeLLM
@@ -36,6 +36,7 @@ class FakeActions:
     proposed: list[ToolCall] = field(default_factory=list)
     resolved: list[tuple[uuid.UUID, bool]] = field(default_factory=list)
     undone: list[uuid.UUID] = field(default_factory=list)
+    open: list[str] = field(default_factory=list)
 
     async def propose(self, calls: Sequence[ToolCall]) -> Proposal | Rejection:
         self.proposed.extend(calls)
@@ -59,6 +60,9 @@ class FakeActions:
         self.undone.append(action_id)
         self.saved_id = None
         return Resolution(action_id, ActionStatus.UNDONE, "undone")
+
+    async def open_tasks(self) -> list[str]:
+        return self.open
 
 
 def llm_calling(*calls: ToolCall, mode: str = "normal") -> FakeLLM:
@@ -185,6 +189,16 @@ async def test_saying_undo_takes_back_what_was_just_saved(personality: Personali
     assert llm.calls == []
 
 
+async def test_undo_misheard_as_and_do_still_takes_it_back(personality: Personality) -> None:
+    saved = uuid.uuid4()
+    actions = FakeActions(saved_id=saved)
+
+    turn = await Conversation(llm_calling(), personality, actions).respond("And do.")
+
+    assert actions.undone == [saved]
+    assert turn.resolution is not None
+
+
 async def test_undo_with_nothing_recent_is_just_conversation(personality: Personality) -> None:
     actions = FakeActions()
 
@@ -223,3 +237,47 @@ async def test_an_obvious_crisis_never_starts_a_normal_draft(personality: Person
     await Conversation(llm, personality, FakeActions()).respond("I can't cope anymore")
 
     assert len(reply_calls(llm)) == 1
+
+
+COMPLETE_CALL = ToolCall("complete_tasks", '{"titles": ["apply for jobs"]}')
+
+
+async def test_the_model_sees_the_open_task_titles(personality: Personality) -> None:
+    actions = FakeActions(open=["apply for jobs", "buy milk"])
+    llm = llm_calling()
+
+    await Conversation(llm, personality, actions).respond("what's left for today?")
+
+    system, _ = reply_calls(llm)[0]
+    assert f"{OPEN_TASKS_GUIDE}\n- apply for jobs\n- buy milk" in system
+
+
+async def test_no_task_list_is_shown_when_nothing_is_open(personality: Personality) -> None:
+    llm = llm_calling()
+
+    await Conversation(llm, personality, FakeActions()).respond("hey")
+
+    assert OPEN_TASKS_GUIDE not in reply_calls(llm)[0][0]
+
+
+async def test_the_task_list_is_left_out_in_a_crisis(personality: Personality) -> None:
+    llm = llm_calling()
+
+    await Conversation(llm, personality, FakeActions(open=["buy milk"])).respond(
+        "I can't cope anymore"
+    )
+
+    assert OPEN_TASKS_GUIDE not in reply_calls(llm)[0][0]
+
+
+async def test_finishing_a_task_becomes_a_tick_off_proposal(personality: Personality) -> None:
+    ticking = Proposal(uuid.uuid4(), (ProposedItem(ActionKind.COMPLETE_TASK, "apply for jobs"),))
+    actions = FakeActions(outcome=ticking, open=["apply for jobs"])
+
+    turn = await Conversation(llm_calling(COMPLETE_CALL), personality, actions).respond(
+        "I finished applying for jobs, tick it off"
+    )
+
+    assert actions.proposed == [COMPLETE_CALL]
+    assert turn.proposal == ticking
+    assert turn.reply == "Nice work. Should I tick off apply for jobs?"

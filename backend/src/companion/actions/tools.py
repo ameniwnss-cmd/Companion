@@ -90,15 +90,31 @@ class AddTasksAndRemindersArgs(_Args):
     )
 
 
+class CompleteTaskArgs(_Args):
+    title: ShortText
+
+
+class CompleteTasksArgs(_Args):
+    titles: list[ShortText] = Field(
+        min_length=1,
+        max_length=MAX_ITEMS_PER_LIST,
+        description=(
+            "The tasks the user says they finished, each copied exactly from their open tasks."
+        ),
+    )
+
+
 TASKS_AND_REMINDERS = "add_tasks_and_reminders"
 WEEKLY_PLAN = "create_weekly_plan"
+COMPLETE_TASKS = "complete_tasks"
 
-ItemArgs = CreateTaskArgs | CreateReminderArgs | CreateWeeklyPlanArgs
+ItemArgs = CreateTaskArgs | CreateReminderArgs | CreateWeeklyPlanArgs | CompleteTaskArgs
 
 KINDS: dict[type[ItemArgs], ActionKind] = {
     CreateTaskArgs: ActionKind.TASK,
     CreateReminderArgs: ActionKind.REMINDER,
     CreateWeeklyPlanArgs: ActionKind.WEEKLY_PLAN,
+    CompleteTaskArgs: ActionKind.COMPLETE_TASK,
 }
 
 
@@ -112,6 +128,9 @@ def requested_items(call: ToolCall) -> list[ItemArgs]:
         return [*args.tasks, *args.reminders]
     if call.name == WEEKLY_PLAN:
         return [CreateWeeklyPlanArgs.model_validate_json(call.arguments)]
+    if call.name == COMPLETE_TASKS:
+        finished = CompleteTasksArgs.model_validate_json(call.arguments)
+        return [CompleteTaskArgs(title=title) for title in finished.titles]
     raise UnknownToolError(call.name)
 
 
@@ -149,5 +168,13 @@ TOOLS: tuple[ToolSpec, ...] = (
             "several days, use a repeating task instead."
         ),
         parameters=inline_schema(CreateWeeklyPlanArgs),
+    ),
+    ToolSpec(
+        name=COMPLETE_TASKS,
+        description=(
+            "Tick off tasks the user says they have finished. Put every finished task from "
+            "their message into this one call, using the exact titles from their open tasks."
+        ),
+        parameters=inline_schema(CompleteTasksArgs),
     ),
 )

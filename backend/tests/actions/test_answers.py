@@ -65,6 +65,31 @@ def test_undo(text: str) -> None:
 @pytest.mark.parametrize(
     "text",
     [
+        "and do",
+        "And do.",
+        "and do it",
+        "an do that",
+        "un-do",
+        "on do please",
+        "Undue.",
+        "um, and do",
+    ],
+)
+def test_common_mishearings_of_undo_still_undo(text: str) -> None:
+    assert classify_answer(text) is Answer.UNDO
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["and do the dishes", "and do it tomorrow", "on doing my homework", "and then do it"],
+)
+def test_a_mishearing_only_counts_on_its_own(text: str) -> None:
+    assert classify_answer(text) is not Answer.UNDO
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
         "",
         "yes but make it 7pm",
         "no, make it 7pm instead",

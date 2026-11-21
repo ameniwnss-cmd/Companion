@@ -98,11 +98,13 @@ class Case:
     category: str
     turns: tuple[str, ...]
     checks: tuple[Check, ...]
+    open_tasks: tuple[str, ...] = ()
 
 
 @dataclass
 class RecordingActions:
     calls: list[ToolCall] = field(default_factory=list)
+    open: tuple[str, ...] = ()
 
     async def propose(self, calls: Sequence[ToolCall]) -> Proposal | Rejection:
         self.calls.extend(calls)
@@ -129,6 +131,9 @@ class RecordingActions:
     async def undo(self, action_id: uuid.UUID) -> Resolution:
         return Resolution(action_id, ActionStatus.UNDONE, "")
 
+    async def open_tasks(self) -> list[str]:
+        return list(self.open)
+
 
 @dataclass(frozen=True, slots=True)
 class CaseResult:
@@ -143,7 +148,7 @@ class CaseResult:
 
 
 async def _converse(case: Case, llm: LLMProvider, personality: Personality) -> Observation:
-    actions = RecordingActions()
+    actions = RecordingActions(open=case.open_tasks)
     conversation = Conversation(llm, personality, actions)
     observation: Observation | None = None
     for said in case.turns:

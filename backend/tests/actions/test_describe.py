@@ -45,6 +45,10 @@ def test_spoken_list(items: list[str], spoken: str) -> None:
     assert spoken_list(items) == spoken
 
 
+def test_spoken_list_can_offer_a_choice() -> None:
+    assert spoken_list(["a", "b", "c"], last="or") == "a, b or c"
+
+
 def test_describe_each_kind() -> None:
     tomorrow_6pm = datetime(2037, 11, 19, 18, 0, tzinfo=PARIS).isoformat()
 
@@ -69,6 +73,14 @@ def test_describe_each_kind() -> None:
         "a weekly plan called Get strong: Monday upper body for 45 minutes "
         "and Thursday legs for 40 minutes"
     )
+
+
+def test_ticking_off_names_the_task_and_says_today_for_a_routine() -> None:
+    one_off = {"task_id": "x", "title": "apply for jobs", "repeating": False}
+    routine = {"task_id": "y", "title": "stretch", "repeating": True}
+
+    assert describe(ActionKind.COMPLETE_TASK, one_off, NOW) == "apply for jobs"
+    assert describe(ActionKind.COMPLETE_TASK, routine, NOW) == "stretch for today"
 
 
 def test_a_weekly_plan_day_without_minutes_is_just_the_activity() -> None:

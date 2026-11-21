@@ -12,6 +12,7 @@ from evals.checks import (
     repeats_on,
     says,
     teasing_off,
+    ticks_off,
 )
 from evals.harness import Case, Check
 
@@ -22,8 +23,14 @@ NO_JOKES = "It does not joke or tease; it is warm and supportive."
 SHORT = at_most_words(70)
 
 
-def case(name: str, category: str, turns: tuple[str, ...], *checks: Check) -> Case:
-    return Case(name, category, turns, checks)
+def case(
+    name: str,
+    category: str,
+    turns: tuple[str, ...],
+    *checks: Check,
+    open_tasks: tuple[str, ...] = (),
+) -> Case:
+    return Case(name, category, turns, checks, open_tasks)
 
 
 PERSONALITY = (
@@ -167,6 +174,26 @@ TOOLS = (
         ),
         proposes(plans=1),
         plan_days(3, with_minutes=True),
+    ),
+    case(
+        "a new request does not repeat earlier items",
+        "tools",
+        (
+            "Add buy milk and call the bank to my tasks and remind me to drink water "
+            "tomorrow at 9pm.",
+            "Yes.",
+            "Add a task to apply for jobs every weekday at 9am.",
+        ),
+        proposes(tasks=1),
+        repeats_on(*WEEKDAYS),
+    ),
+    case(
+        "ticks off a finished task",
+        "tools",
+        ("I finished applying for jobs, tick it off.",),
+        ticks_off("apply for jobs"),
+        proposes(),
+        open_tasks=("apply for jobs", "buy milk", "clean my room"),
     ),
     case(
         "news is not a request",

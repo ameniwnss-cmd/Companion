@@ -1,5 +1,5 @@
 export type Mode = 'normal' | 'supportive' | 'crisis';
-export type ActionKind = 'task' | 'reminder' | 'weekly_plan';
+export type ActionKind = 'task' | 'reminder' | 'weekly_plan' | 'complete_task';
 export type ActionStatus = 'pending' | 'confirmed' | 'cancelled' | 'expired' | 'undone';
 
 export interface UserMessageEvent {

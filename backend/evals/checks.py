@@ -1,4 +1,5 @@
 from companion.actions.tools import (
+    CompleteTaskArgs,
     CreateReminderArgs,
     CreateTaskArgs,
     CreateWeeklyPlanArgs,
@@ -43,6 +44,16 @@ def proposes(*, tasks: int = 0, reminders: int = 0, plans: int = 0) -> Check:
         )
 
     return Check(f"proposes {tasks} task(s), {reminders} reminder(s), {plans} plan(s)", verify)
+
+
+def ticks_off(*titles: str) -> Check:
+    expected = sorted(titles)
+
+    async def verify(seen: Observation, _: Judge) -> Verdict:
+        ticked = sorted(item.title for item in seen.items if isinstance(item, CompleteTaskArgs))
+        return Verdict(ticked == expected, f"ticked off: {ticked or 'nothing'}")
+
+    return Check(f"ticks off {', '.join(expected)}", verify)
 
 
 def one_tool_call() -> Check:

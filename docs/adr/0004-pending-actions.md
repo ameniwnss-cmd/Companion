@@ -4,7 +4,8 @@
 
 ## Context
 
-The companion creates tasks, reminders and workout plans through LLM tool calls. Speech
+The companion creates tasks, reminders and workout plans, and ticks off finished tasks, through
+LLM tool calls. Speech
 recognition mishears, models misread intent, and in the spike a small model sometimes emitted
 the same tool call twice. Saving straight from a tool call would leave wrong data behind.
 
@@ -19,11 +20,24 @@ One request can hold several items ("add milk, eggs and call the bank at 5"). Ta
 share one tool that takes lists, because the hosted model makes a single tool call per reply and
 would otherwise drop everything after the first item. The valid, distinct items become one
 **batch** of pending actions that is read back and confirmed with a single yes. Items with
-unclear details are left out and the companion asks for them again.
+unclear details are left out and the companion asks for them again. Models sometimes repeat
+items from an earlier, already saved request, so code drops any task that matches an open task
+by normalised title, and any reminder that matches a waiting reminder by title and time, and the
+companion says they are already on the list.
 
 A confirmed batch can be **undone** for ten minutes, by voice ("undo that") or a button. Undo
 deletes exactly the records that batch created, which each pending action remembers. This keeps
 hands-free use quick without letting the model save anything on its own.
+
+Ticking off a finished task ("I finished applying for jobs, tick it off") goes through the same
+flow. The system prompt lists the user's open task titles, and the `complete_tasks` tool takes
+titles, never ids. Code matches each title against the user's own open tasks: an exact match
+after normalising case and punctuation first, then a unique whole-word partial match. When
+nothing matches, several tasks match, or the task is already done, the companion says so instead
+of guessing; tasks with identical titles count as one. Confirming marks a one-off task done, or a
+repeating task done for today in the user's timezone. A tick-off changes an existing row instead
+of creating one, so it stores the task's previous state, and undo restores that state rather than
+deleting anything.
 
 Spoken answers are matched by code, not by the model. The first meaningful word decides
 ("Yes, do it", "Yeah, David" from a mishearing, "no thanks"), and words that change the request

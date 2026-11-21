@@ -40,7 +40,7 @@
         [disabled]="!session.canSend()"
         (click)="session.resolve(action.actionId, true)"
       >
-        <app-icon name="check" />{{ action.items.length === 1 ? 'Save' : 'Save all' }}
+        <app-icon name="check" />{{ confirmLabel(action.items) }}
       </button>
       <button
         app-button

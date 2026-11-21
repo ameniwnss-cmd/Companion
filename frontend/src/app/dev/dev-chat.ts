@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CompanionSession } from '../session/companion-session';
-import { ActionKind } from '../session/protocol';
+import { ActionKind, PendingItem } from '../session/protocol';
 import { PushToTalk } from '../session/push-to-talk';
 import { AudioPlayer } from '../voice/audio-player';
 
@@ -22,7 +22,12 @@ export class DevChat {
     task: 'Task',
     reminder: 'Reminder',
     weekly_plan: 'Weekly plan',
+    complete_task: 'Quest done',
   };
+
+  protected confirmLabel(items: readonly PendingItem[]): string {
+    return items.every((item) => item.kind === 'complete_task') ? 'Tick off' : 'Save';
+  }
 
   protected send(): void {
     this.chat.send(this.draft());

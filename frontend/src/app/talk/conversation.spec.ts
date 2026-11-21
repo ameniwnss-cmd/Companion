@@ -242,6 +242,46 @@ describe('Conversation', () => {
     expect(card.querySelector('button[data-variant="primary"]')?.textContent).toContain('Save all');
   });
 
+  it('labels a finished quest as done and offers to tick it off', async () => {
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'complete_task', summary: 'apply for jobs' }],
+    });
+    await settle();
+
+    const card = page.querySelector('[data-testid="pending-action"]') as HTMLElement;
+    expect(card.textContent).toContain('Quest done');
+    expect(card.textContent).toContain('apply for jobs');
+    const tick = card.querySelector('button[data-variant="primary"]') as HTMLButtonElement;
+    expect(tick.textContent?.trim()).toBe('Tick off');
+    tick.click();
+    expect(socket.sent).toEqual([{ type: 'resolve_action', id: 'a1', confirm: true }]);
+
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'confirmed' });
+    await settle();
+    const saved = page.querySelector('[data-testid="saved"]') as HTMLElement;
+    expect(saved.textContent).toContain('Ticked off.');
+  });
+
+  it('ticks off several quests at once', async () => {
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [
+        { kind: 'complete_task', summary: 'buy milk' },
+        { kind: 'complete_task', summary: 'stretch for today' },
+      ],
+    });
+    await settle();
+
+    const card = page.querySelector('[data-testid="pending-action"]') as HTMLElement;
+    expect(card.textContent).toContain('2 quests done');
+    expect(card.querySelector('button[data-variant="primary"]')?.textContent).toContain(
+      'Tick off all',
+    );
+  });
+
   it('offers to undo what was just saved', async () => {
     socket.emit({
       type: 'pending_action',

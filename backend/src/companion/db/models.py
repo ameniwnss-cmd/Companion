@@ -77,6 +77,7 @@ class ActionKind(StrEnum):
     TASK = "task"
     REMINDER = "reminder"
     WEEKLY_PLAN = "weekly_plan"
+    COMPLETE_TASK = "complete_task"
 
 
 class ActionStatus(StrEnum):

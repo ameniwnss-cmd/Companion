@@ -130,6 +130,19 @@ describe('DevChat', () => {
     expect(card.textContent).toContain('confirmed');
   });
 
+  it('labels a finished quest with a tick-off button', async () => {
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'complete_task', summary: 'buy milk' }],
+    });
+    await fixture.whenStable();
+
+    const card = page.querySelector('[data-testid="action-card"]') as HTMLElement;
+    expect(card.textContent).toContain('Quest done');
+    expect(card.querySelector('button')?.textContent?.trim()).toBe('Tick off');
+  });
+
   const talkButton = () => page.querySelector('.talk') as HTMLButtonElement;
 
   it('records while the talk button is held and sends the recording on release', async () => {

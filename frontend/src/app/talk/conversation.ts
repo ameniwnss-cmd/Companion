@@ -34,13 +34,19 @@ const KIND_LABELS: Record<ActionKind, string> = {
   task: 'New quest',
   reminder: 'New reminder',
   weekly_plan: 'New weekly plan',
+  complete_task: 'Quest done',
 };
 
 const KIND_ICONS: Record<ActionKind, IconName> = {
   task: 'quests',
   reminder: 'bell',
   weekly_plan: 'calendar',
+  complete_task: 'promise',
 };
+
+function ticksOff(items: readonly PendingItem[]): boolean {
+  return items.every((item) => item.kind === 'complete_task');
+}
 
 function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
@@ -119,11 +125,20 @@ export class Conversation {
   };
 
   protected cardTitle(items: readonly PendingItem[]): string {
-    return items.length === 1 ? KIND_LABELS[items[0].kind] : `${items.length} new things`;
+    if (items.length === 1) {
+      return KIND_LABELS[items[0].kind];
+    }
+    return ticksOff(items) ? `${items.length} quests done` : `${items.length} new things`;
+  }
+
+  protected confirmLabel(items: readonly PendingItem[]): string {
+    const verb = ticksOff(items) ? 'Tick off' : 'Save';
+    return items.length === 1 ? verb : `${verb} all`;
   }
 
   protected savedLabel(items: readonly PendingItem[]): string {
-    return items.length === 1 ? 'Saved' : `Saved all ${items.length}`;
+    const done = ticksOff(items) ? 'Ticked off' : 'Saved';
+    return items.length === 1 ? done : `${done} all ${items.length}`;
   }
 
   protected dismissSaved(id: number): void {

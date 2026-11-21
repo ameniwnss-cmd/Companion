@@ -164,6 +164,18 @@ describe('CompanionSession', () => {
     expect(chat.plansVersion()).toBe(3);
   });
 
+  it('refreshes the plans when a quest is ticked off or unticked', () => {
+    socket.emit({
+      type: 'pending_action',
+      id: 'a1',
+      items: [{ kind: 'complete_task', summary: 'buy milk' }],
+    });
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'confirmed' });
+    socket.emit({ type: 'action_resolved', id: 'a1', status: 'undone' });
+
+    expect(chat.plansVersion()).toBe(2);
+  });
+
   it('does not resolve while the companion is thinking', () => {
     socket.emit({ type: 'status', state: 'thinking' });
 

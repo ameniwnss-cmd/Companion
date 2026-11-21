@@ -4,10 +4,13 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from companion.actions.tools import (
+    COMPLETE_TASKS,
     MAX_ITEMS_PER_LIST,
     TASKS_AND_REMINDERS,
     TOOLS,
     AddTasksAndRemindersArgs,
+    CompleteTaskArgs,
+    CompleteTasksArgs,
     CreateReminderArgs,
     CreateTaskArgs,
     CreateWeeklyPlanArgs,
@@ -17,10 +20,11 @@ from companion.actions.tools import (
 from companion.llm import ToolCall
 
 
-def test_two_tools_are_offered_with_json_schemas() -> None:
+def test_three_tools_are_offered_with_json_schemas() -> None:
     by_name = {tool.name: tool for tool in TOOLS}
 
-    assert set(by_name) == {"add_tasks_and_reminders", "create_weekly_plan"}
+    assert set(by_name) == {"add_tasks_and_reminders", "create_weekly_plan", "complete_tasks"}
+    assert by_name["complete_tasks"].parameters["required"] == ["titles"]
     lists = by_name["add_tasks_and_reminders"].parameters["properties"]
     assert lists["reminders"]["items"]["required"] == ["title", "when"]
     assert lists["tasks"]["items"]["required"] == ["title"]
@@ -41,6 +45,14 @@ def test_one_call_lists_every_task_and_reminder() -> None:
         "CreateTaskArgs",
         "CreateReminderArgs",
     ]
+
+
+def test_one_call_ticks_off_every_finished_task() -> None:
+    arguments = json.dumps({"titles": ["apply for jobs", " buy milk "]})
+
+    items = requested_items(ToolCall(COMPLETE_TASKS, arguments))
+
+    assert items == [CompleteTaskArgs(title="apply for jobs"), CompleteTaskArgs(title="buy milk")]
 
 
 def test_an_unknown_tool_is_refused() -> None:
@@ -66,6 +78,9 @@ def test_arguments_are_trimmed() -> None:
             json.dumps({"tasks": [{"title": "x"}] * (MAX_ITEMS_PER_LIST + 1)}),
         ),
         (CreateWeeklyPlanArgs, '{"name": "plan", "days": []}'),
+        (CompleteTasksArgs, '{"titles": []}'),
+        (CompleteTasksArgs, '{"titles": [""]}'),
+        (CompleteTasksArgs, json.dumps({"titles": ["x"] * (MAX_ITEMS_PER_LIST + 1)})),
         (
             CreateWeeklyPlanArgs,
             '{"name": "p", "days": [{"day": "funday", "activity": "legs", "minutes": 30}]}',

@@ -3,13 +3,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from companion.actions.service import utc_now
-from companion.db.models import Reminder, Task, User, WeeklyPlan
+from companion.actions.matching import is_done
+from companion.actions.service import user_today, utc_now
+from companion.db.models import Reminder, Task, WeeklyPlan
 from companion.db.session import SessionFactory
 
 
@@ -49,14 +49,13 @@ Owned = type[Task] | type[Reminder] | type[WeeklyPlan]
 
 
 def _view(task: Task, today: date) -> TaskView:
-    done = task.done_on == today if task.repeat_days else task.done
     return TaskView(
         task.id,
         task.title,
         task.due_at,
         task.repeat_days,
         task.time_of_day,
-        done,
+        is_done(task, today),
         task.created_at,
     )
 
@@ -69,8 +68,7 @@ class PlansService:
         self._clock = clock
 
     async def _today(self, session: AsyncSession, user_id: uuid.UUID) -> date:
-        timezone = await session.scalar(select(User.timezone).where(User.id == user_id))
-        return self._clock().astimezone(ZoneInfo(timezone or "UTC")).date()
+        return await user_today(session, user_id, self._clock())
 
     async def tasks(self, user_id: uuid.UUID) -> list[TaskView]:
         async with self._sessions() as session:

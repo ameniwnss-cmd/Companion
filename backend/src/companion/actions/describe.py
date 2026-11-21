@@ -35,10 +35,10 @@ def spoken_time(moment: datetime, now: datetime) -> str:
     return f"{day} at {spoken_clock(local)}"
 
 
-def spoken_list(items: list[str]) -> str:
+def spoken_list(items: list[str], last: str = "and") -> str:
     if len(items) <= 1:
         return "".join(items)
-    return f"{', '.join(items[:-1])} and {items[-1]}"
+    return f"{', '.join(items[:-1])} {last} {items[-1]}"
 
 
 def days_phrase(days: Collection[Weekday | str]) -> str:
@@ -78,3 +78,6 @@ def describe(kind: ActionKind, payload: dict[str, Any], now: datetime) -> str:
                 for d in payload["sessions"]
             ]
             return f"a weekly plan called {payload['name']}: {spoken_list(days)}"
+        case ActionKind.COMPLETE_TASK:
+            title: str = payload["title"]
+            return f"{title} for today" if payload.get("repeating") else title

@@ -22,7 +22,7 @@
                   (click)="chat.resolve(entry.actionId, true)"
                   [disabled]="!chat.canSend()"
                 >
-                  Save
+                  {{ confirmLabel(entry.items) }}
                 </button>
                 <button
                   type="button"

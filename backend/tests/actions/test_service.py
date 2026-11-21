@@ -449,6 +449,72 @@ async def test_a_repeating_reminder_starts_at_the_next_matching_day(
     assert saved.remind_at == datetime(2037, 11, 23, 20, 0, tzinfo=UTC)
 
 
+async def test_items_already_saved_are_not_saved_again(
+    service: ActionService, user: User, sessions: SessionFactory
+) -> None:
+    first = await proposal(service, user, task(title="Call the Bank"), REMINDER)
+    await service.resolve(user.id, first.action_id, confirm=True)
+
+    again = await proposal(
+        service,
+        user,
+        task(title="apply for jobs", repeat=["monday"]),
+        task(title="call the bank"),
+        REMINDER,
+    )
+
+    assert [item.summary for item in again.items] == ["a task: apply for jobs, every Monday"]
+    assert again.question == (
+        "Got it, a task: apply for jobs, every Monday. Should I save it? "
+        "Call the Bank and call mom are already on your list."
+    )
+    await service.resolve(user.id, again.action_id, confirm=True)
+    async with sessions() as session:
+        assert len(list(await session.scalars(select(Task)))) == 2
+        assert len(list(await session.scalars(select(Reminder)))) == 1
+
+
+async def test_only_duplicates_is_said_instead_of_proposed(
+    service: ActionService, user: User
+) -> None:
+    first = await proposal(service, user, task(title="buy milk"))
+    await service.resolve(user.id, first.action_id, confirm=True)
+
+    outcome = await service.propose(user.id, PARIS, [task(title="Buy milk!")])
+
+    assert outcome == Rejection("buy milk is already on your list.")
+    assert await service.pending(user.id) is None
+
+
+async def test_a_finished_task_or_a_new_time_can_be_added_again(
+    service: ActionService, user: User, sessions: SessionFactory
+) -> None:
+    first = await proposal(service, user, task(title="buy milk"), REMINDER)
+    await service.resolve(user.id, first.action_id, confirm=True)
+    async with sessions() as session, session.begin():
+        milk = await session.scalar(select(Task))
+        assert milk is not None
+        milk.done = True
+
+    again = await proposal(
+        service, user, task(title="buy milk"), reminder(title="call mom", when="tomorrow at 8pm")
+    )
+
+    assert len(again.items) == 2
+
+
+async def test_another_users_items_never_count_as_duplicates(
+    service: ActionService, user: User, sessions: SessionFactory
+) -> None:
+    other = await get_or_create_user(sessions, "mallory@example.com", PARIS)
+    first = await proposal(service, user, task(title="buy milk"), REMINDER)
+    await service.resolve(user.id, first.action_id, confirm=True)
+
+    theirs = await proposal(service, other, task(title="buy milk"), REMINDER)
+
+    assert len(theirs.items) == 2
+
+
 async def test_a_repeating_item_needs_a_clear_time(service: ActionService, user: User) -> None:
     outcome = await service.propose(
         user.id, PARIS, [task(title="x", repeat=["monday"], at="whenever")]
